@@ -152,7 +152,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-pink-600 dark:text-pink-400" />
         <p className="text-sm font-medium">Loading your profile details...</p>
       </div>
     );
@@ -166,7 +166,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{error}</p>
         <button
           onClick={loadProfile}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
         >
           Try Again
         </button>
@@ -211,7 +211,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5 text-center sm:text-left min-w-0">
             {/* Student Avatar */}
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 border-indigo-200/50 dark:border-indigo-800/50 shrink-0">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr from-pink-600 to-rose-600 text-white font-bold text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 border-pink-200/50 dark:border-pink-800/50 shrink-0">
               {getInitials(profile?.name || currentUser?.name)}
             </div>
 
@@ -220,7 +220,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
                   {profile?.name || currentUser?.name || 'Student Name'}
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800">
                   Student
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
@@ -260,7 +260,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                   type="button"
                   onClick={handleSaveChanges}
                   disabled={saving}
-                  className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>Save Changes</span>
@@ -270,7 +270,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
               <button
                 type="button"
                 onClick={handleStartEdit}
-                className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
               >
                 <Edit3 className="w-4 h-4" />
                 <span>Edit Contact Details</span>
@@ -286,7 +286,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
         {/* 2. Personal Information Card */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
           <div className="flex items-center gap-3 pb-4 mb-1 border-b border-slate-100 dark:border-slate-800">
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+            <div className="p-2.5 rounded-xl bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400">
               <User className="w-5 h-5" />
             </div>
             <div>
@@ -349,7 +349,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                   value={formData.phone}
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                   placeholder="Enter 10-digit phone number"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -370,7 +370,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                   value={formData.address}
                   onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
                   placeholder="Enter residential address"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               ) : (
                 <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -385,7 +385,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
         {/* 3. Academic & Curriculum Group Card */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
           <div className="flex items-center gap-3 pb-4 mb-1 border-b border-slate-100 dark:border-slate-800">
-            <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
+            <div className="p-2.5 rounded-xl bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400">
               <GraduationCap className="w-5 h-5" />
             </div>
             <div>
@@ -442,7 +442,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
               </label>
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center justify-between">
                 <span>{profile?.classRef?.name || (profile?.department ? `${profile.department} Section ${profile.section}` : 'Standard Section')}</span>
-                <span className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">Class Cohort</span>
+                <span className="text-[10px] uppercase font-bold text-pink-600 dark:text-pink-400">Class Cohort</span>
               </div>
             </div>
           </div>
@@ -482,7 +482,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
               <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Account Role
               </p>
-              <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 capitalize">
+              <p className="text-sm font-bold text-pink-600 dark:text-pink-400 capitalize">
                 Student
               </p>
               <p className="text-[10px] text-slate-400">Portal authorization</p>
@@ -522,7 +522,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                 setPasswordSuccess('');
                 setShowPasswordModal(true);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-indigo-600 dark:text-indigo-400 transition-colors w-fit cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-pink-600 dark:text-pink-400 transition-colors w-fit cursor-pointer"
             >
               <span>Change Password</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -549,7 +549,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-5 animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400">
+                <div className="p-2 rounded-xl bg-pink-50 dark:bg-pink-950/70 text-pink-600 dark:text-pink-400">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
@@ -594,7 +594,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="Enter current password"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
 
@@ -607,7 +607,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="At least 8 characters"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
 
@@ -620,7 +620,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter new password"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
 
@@ -635,7 +635,7 @@ export default function StudentProfilePage({ currentUser, onPasswordChanged, onL
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold transition-colors shadow-xs cursor-pointer"
                 >
                   {passwordLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>Update Password</span>

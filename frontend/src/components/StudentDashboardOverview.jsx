@@ -162,7 +162,7 @@ export default function StudentDashboardOverview({ currentUser }) {
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-full min-h-[400px] text-slate-500 dark:text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400 mb-3" />
+        <Loader2 className="w-8 h-8 animate-spin text-pink-600 dark:text-pink-400 mb-3" />
         <p className="text-sm font-medium">Loading your student dashboard...</p>
       </div>
     );
@@ -182,7 +182,7 @@ export default function StudentDashboardOverview({ currentUser }) {
         </p>
         <button
           onClick={fetchStudentData}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors shadow-xs cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-medium transition-colors shadow-xs cursor-pointer"
         >
           <RefreshCw className="w-4 h-4" />
           <span>Retry</span>
@@ -198,8 +198,8 @@ export default function StudentDashboardOverview({ currentUser }) {
       value: assignments.length,
       subtext: assignments.length > 0 ? `${assignments.length} enrolled subjects` : 'No subjects assigned yet',
       icon: BookOpen,
-      color: 'text-indigo-600 dark:text-indigo-400',
-      bg: 'bg-indigo-50 dark:bg-indigo-950/60',
+      color: 'text-pink-600 dark:text-pink-400',
+      bg: 'bg-pink-50 dark:bg-pink-950/60',
       link: '/student/subjects'
     },
     {
@@ -216,8 +216,8 @@ export default function StudentDashboardOverview({ currentUser }) {
       value: assignments.length,
       subtext: data?.assignmentsPending ? 'Curriculum pending' : `${assignments.length} assigned courses`,
       icon: BookOpenCheck,
-      color: 'text-violet-600 dark:text-violet-400',
-      bg: 'bg-violet-50 dark:bg-violet-950/60',
+      color: 'text-pink-600 dark:text-pink-400',
+      bg: 'bg-pink-50 dark:bg-pink-950/60',
       link: '/student/assignments'
     },
     {
@@ -225,8 +225,8 @@ export default function StudentDashboardOverview({ currentUser }) {
       value: averageScore !== null ? `${averageScore}%` : '--',
       subtext: averageScore !== null ? 'Overall score average' : 'No records evaluated',
       icon: TrendingUp,
-      color: 'text-cyan-600 dark:text-cyan-400',
-      bg: 'bg-cyan-50 dark:bg-cyan-950/60',
+      color: 'text-pink-600 dark:text-pink-400',
+      bg: 'bg-pink-50 dark:bg-pink-950/60',
       link: '/student/learning-progress'
     }
   ];
@@ -237,8 +237,8 @@ export default function StudentDashboardOverview({ currentUser }) {
       {/* 1. Student Welcome Banner & College Branding */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-200 gap-4">
         <div className="flex items-center gap-4 min-w-0">
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 flex items-center justify-center shrink-0">
-            <GraduationCap className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+          <div className="w-12 h-12 rounded-xl bg-pink-50 dark:bg-pink-950/60 border border-pink-200 dark:border-pink-800/80 flex items-center justify-center shrink-0">
+            <GraduationCap className="w-6 h-6 text-pink-600 dark:text-pink-400" />
           </div>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 truncate">
@@ -267,11 +267,11 @@ export default function StudentDashboardOverview({ currentUser }) {
                 onError={() => setLogoLoadError(true)}
               />
             ) : (
-              <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 flex items-center justify-center shrink-0 text-indigo-700 dark:text-indigo-400 font-bold text-xs shadow-2xs select-none">
+              <div className="w-10 h-10 rounded-lg bg-pink-50 dark:bg-pink-950/60 border border-pink-200 dark:border-pink-800/80 flex items-center justify-center shrink-0 text-pink-700 dark:text-pink-400 font-bold text-xs shadow-2xs select-none">
                 {collegeInitials ? (
                   <span>{collegeInitials}</span>
                 ) : (
-                  <Building2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  <Building2 className="w-5 h-5 text-pink-600 dark:text-pink-400" />
                 )}
               </div>
             )}
@@ -291,7 +291,7 @@ export default function StudentDashboardOverview({ currentUser }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
         {statCards.map((card, idx) => {
           const CardContent = (
-            <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 min-h-[148px] flex flex-col justify-center gap-3.5 transition-all hover:shadow-md ${card.link ? 'cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700/60' : ''}`}>
+            <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 min-h-[148px] flex flex-col justify-center gap-3.5 transition-all hover:shadow-md ${card.link ? 'cursor-pointer hover:border-pink-300 dark:hover:border-pink-700/60' : ''}`}>
               <div className="flex items-center justify-between">
                 <div className={`p-3 rounded-xl ${card.bg} ${card.color}`}>
                   <card.icon className="w-6 h-6" />
@@ -310,7 +310,7 @@ export default function StudentDashboardOverview({ currentUser }) {
             <Link 
               to={card.link} 
               key={idx} 
-              className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-2xl"
+              className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 rounded-2xl"
             >
               {CardContent}
             </Link>
@@ -327,12 +327,12 @@ export default function StudentDashboardOverview({ currentUser }) {
           tabIndex={0}
           onClick={() => navigate('/student/academic-records')}
           onKeyDown={(e) => handleCardKeyDown(e, '/student/academic-records')}
-          className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 flex flex-col transition-all duration-200 cursor-pointer hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 group"
+          className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 flex flex-col transition-all duration-200 cursor-pointer hover:shadow-md hover:border-pink-300 dark:hover:border-pink-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 group"
           aria-label="View Academic Records"
         >
           <div className="flex justify-between items-center mb-5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-              <FileText className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
+              <FileText className="w-5 h-5 text-pink-500" />
               <span>Academic Performance</span>
             </h2>
             {academicRecords.length > 0 && (
@@ -368,7 +368,7 @@ export default function StudentDashboardOverview({ currentUser }) {
                     type="monotone" 
                     dataKey="score" 
                     name="Score (%)" 
-                    stroke="#6366f1" 
+                    stroke="#ec4899" 
                     strokeWidth={3} 
                     dot={{ r: 5, strokeWidth: 2 }} 
                     activeDot={{ r: 7 }} 
@@ -406,7 +406,7 @@ export default function StudentDashboardOverview({ currentUser }) {
           tabIndex={0}
           onClick={() => navigate('/student/attendance')}
           onKeyDown={(e) => handleCardKeyDown(e, '/student/attendance')}
-          className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 flex flex-col transition-all duration-200 cursor-pointer hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 group"
+          className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 flex flex-col transition-all duration-200 cursor-pointer hover:shadow-md hover:border-pink-300 dark:hover:border-pink-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 group"
           aria-label="View Attendance"
         >
           <div className="flex justify-between items-center mb-5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
@@ -485,12 +485,12 @@ export default function StudentDashboardOverview({ currentUser }) {
           tabIndex={0}
           onClick={() => navigate('/student/interventions')}
           onKeyDown={(e) => handleCardKeyDown(e, '/student/interventions')}
-          className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 flex flex-col transition-all duration-200 cursor-pointer hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 group"
+          className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-7 flex flex-col transition-all duration-200 cursor-pointer hover:shadow-md hover:border-pink-300 dark:hover:border-pink-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 group"
           aria-label="View Learning Support & Interventions"
         >
           <div className="flex justify-between items-center mb-5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
-              <Sparkles className="w-5 h-5 text-violet-500" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
+              <Sparkles className="w-5 h-5 text-pink-500" />
               <span>Learning Support</span>
             </h2>
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
@@ -509,7 +509,7 @@ export default function StudentDashboardOverview({ currentUser }) {
           </div>
 
           <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
-            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+            <span className="text-xs font-semibold text-pink-600 dark:text-pink-400 hover:underline">
               Explore Academic Support &rarr;
             </span>
           </div>

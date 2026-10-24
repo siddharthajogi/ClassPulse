@@ -9,10 +9,10 @@ const roleMeta = {
     idPlaceholder: 'Enter your Student ID',
     buttonText: 'Login',
     icon: GraduationCap,
-    accentColor: 'border-purple-200 dark:border-purple-900/50 hover:border-purple-400 dark:hover:border-purple-700 focus-within:border-purple-500',
-    iconBg: 'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400',
-    btnClass: 'bg-purple-600 hover:bg-purple-700 text-white',
-    focusRing: 'focus:ring-purple-500'
+    accentColor: 'border-pink-200 dark:border-pink-900/50 hover:border-pink-400 dark:hover:border-pink-700 focus-within:border-pink-500',
+    iconBg: 'bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400',
+    btnClass: 'bg-pink-600 hover:bg-pink-700 text-white',
+    focusRing: 'focus:ring-pink-500'
   },
   teacher: {
     title: 'Teacher',

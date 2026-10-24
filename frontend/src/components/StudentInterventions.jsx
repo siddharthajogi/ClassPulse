@@ -40,7 +40,7 @@ export default function StudentInterventions() {
             <p className="text-[11px] text-slate-400">No critical risk flags detected in your coursework</p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <LifeBuoy className="w-5 h-5 text-indigo-500 mb-1" />
+            <LifeBuoy className="w-5 h-5 text-pink-500 mb-1" />
             <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Need Guidance?</h4>
             <p className="text-[11px] text-slate-400">Reach out to your department coordinator or mentor</p>
           </div>

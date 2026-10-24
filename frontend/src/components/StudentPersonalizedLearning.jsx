@@ -11,7 +11,7 @@ export default function StudentPersonalizedLearning() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
               Personalized Learning
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/80">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/80">
               Adaptive Modules
             </span>
           </div>
@@ -23,7 +23,7 @@ export default function StudentPersonalizedLearning() {
 
       {/* Informative Guidance & Empty State */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 sm:p-12 border border-slate-200 dark:border-slate-800 text-center max-w-2xl mx-auto shadow-xs space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-violet-50 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/80 flex items-center justify-center mx-auto text-violet-600 dark:text-violet-400">
+        <div className="w-14 h-14 rounded-2xl bg-pink-50 dark:bg-pink-950/60 border border-pink-200 dark:border-pink-800/80 flex items-center justify-center mx-auto text-pink-600 dark:text-pink-400">
           <Sparkles className="w-7 h-7" />
         </div>
         <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
@@ -35,12 +35,12 @@ export default function StudentPersonalizedLearning() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 text-left">
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <Target className="w-5 h-5 text-indigo-500 mb-1" />
+            <Target className="w-5 h-5 text-pink-500 mb-1" />
             <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Targeted Practice</h4>
             <p className="text-[11px] text-slate-400">Focus on difficult concept prerequisites</p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <Compass className="w-5 h-5 text-violet-500 mb-1" />
+            <Compass className="w-5 h-5 text-pink-500 mb-1" />
             <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Adaptive Pace</h4>
             <p className="text-[11px] text-slate-400">Personalized revision sets customized to your schedule</p>
           </div>

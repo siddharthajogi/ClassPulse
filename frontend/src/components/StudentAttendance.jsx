@@ -59,7 +59,7 @@ export default function StudentAttendance() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-600 dark:text-emerald-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-pink-600 dark:text-pink-400" />
         <p className="text-sm font-medium">Loading your attendance records...</p>
       </div>
     );
@@ -73,7 +73,7 @@ export default function StudentAttendance() {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{error}</p>
         <button
           onClick={fetchAttendance}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
         >
           Try Again
         </button>
@@ -109,7 +109,7 @@ export default function StudentAttendance() {
           onClick={fetchAttendance}
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors shadow-xs cursor-pointer"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <RefreshCw className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
           <span>Refresh</span>
         </button>
       </div>
@@ -131,7 +131,7 @@ export default function StudentAttendance() {
           </div>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-xs">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Course Breakdown</p>
-            <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-2">{attendanceList.length}</p>
+            <p className="text-3xl font-bold text-pink-600 dark:text-pink-400 mt-2">{attendanceList.length}</p>
             <p className="text-xs text-slate-500 mt-1">Subjects with recorded attendance</p>
           </div>
         </div>

@@ -31,7 +31,11 @@ export default function StudentTeacherAccount({ user, onPasswordChanged, onLogou
           className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shadow-sm cursor-pointer flex items-center gap-2 text-xs font-medium"
           title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+          {theme === 'dark' ? (
+            <Sun className="w-4 h-4 text-amber-400" />
+          ) : (
+            <Moon className={`w-4 h-4 ${user?.role === 'student' ? 'text-pink-600' : (user?.role === 'teacher' ? 'text-emerald-600' : 'text-blue-600')}`} />
+          )}
           <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
       </div>
