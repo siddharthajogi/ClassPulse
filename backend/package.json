@@ -1,0 +1,31 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch-path=index.js --watch-path=routes --watch-path=models --watch-path=middleware --watch-path=controllers --watch-path=services --watch-path=config --watch-path=.env index.js",
+    "seed:admin": "node scripts/seedAdmin.js",
+    "test": "node scripts/testAuth.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "connect-mongo": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.6",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.11.1",
+    "multer": "^2.5.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true
+  }
+}
