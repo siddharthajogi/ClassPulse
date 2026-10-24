@@ -108,3 +108,68 @@ select option:checked {
   background: #475569;
 }
 
+/* ==========================================================================
+   ClassPulse Shared Card Spacing & Visual Separation Design System
+   Provides consistent breathing room, visual depth, and responsive layouts
+   across Administrator, Teacher, and Student portals.
+   ========================================================================== */
+
+/* Enhanced Card Visual Boundary & Depth */
+.card-elevated,
+[class*="rounded-xl"][class*="border"],
+[class*="rounded-2xl"][class*="border"],
+[class*="rounded-3xl"][class*="border"] {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+}
+
+.dark .card-elevated,
+.dark [class*="rounded-xl"][class*="border"],
+.dark [class*="rounded-2xl"][class*="border"],
+.dark [class*="rounded-3xl"][class*="border"] {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.35), 0 1px 2px -1px rgb(0 0 0 / 0.25);
+}
+
+/* Reusable Card Helpers */
+.cp-card {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--color-slate-200, #e2e8f0);
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.dark .cp-card {
+  border-color: var(--color-slate-800, #1e293b);
+  background-color: var(--color-slate-900, #0f172a);
+}
+
+@media (min-width: 640px) {
+  .cp-card {
+    padding: 1.75rem;
+  }
+}
+
+/* Stat & Metric Cards: Compact, aligned, with proper minimum height */
+.cp-metric-card {
+  min-height: 9.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.875rem;
+}
+
+/* Analytics Cards: Proper breathing room for chart content */
+.cp-analytics-chart {
+  min-height: 16.875rem;
+  position: relative;
+  width: 100%;
+}
+
+/* Sub-boxes / Mini-metric items inside large profile or group cards */
+.cp-mini-stat {
+  min-height: 4.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+

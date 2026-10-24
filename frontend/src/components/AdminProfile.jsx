@@ -825,11 +825,11 @@ export default function AdminProfile() {
       )}
 
       {/* Profile Content Grid */}
-      <form onSubmit={handleSaveChanges} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form onSubmit={handleSaveChanges} className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7">
 
         {/* 2. Personal Information Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
-          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+          <div className="flex items-center gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
             <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
               <User className="w-5 h-5" />
             </div>
@@ -1110,8 +1110,8 @@ export default function AdminProfile() {
         </div>
 
         {/* 4. Account Information Card (Full Width on 2-col or Bottom) */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+          <div className="flex items-center justify-between pb-4 mb-1 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
                 <ShieldCheck className="w-5 h-5" />
@@ -1128,9 +1128,9 @@ export default function AdminProfile() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             {/* Admin ID */}
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
               <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Admin ID
               </p>
@@ -1141,7 +1141,7 @@ export default function AdminProfile() {
             </div>
 
             {/* Assigned Role */}
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
               <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Account Role
               </p>
@@ -1152,7 +1152,7 @@ export default function AdminProfile() {
             </div>
 
             {/* Account Status */}
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
               <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Account Status
               </p>
@@ -1163,7 +1163,7 @@ export default function AdminProfile() {
             </div>
 
             {/* Account Created Date */}
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
               <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Account Created Date
               </p>
@@ -1175,7 +1175,7 @@ export default function AdminProfile() {
           </div>
 
           {/* Security Notice */}
-          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/80">
             <div className="flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-slate-400 shrink-0" />
               <span>Password and authorization secrets are strictly protected and never stored in plain text.</span>

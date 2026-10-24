@@ -492,10 +492,10 @@ export default function TeacherClassesSections({ currentUser }) {
                       <div
                         key={deptCard.deptKey}
                         data-testid={`department-card-${deptCard.departmentCode || deptCard.departmentName}`}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all p-5 sm:p-6"
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all p-6 sm:p-7"
                       >
                         {/* Department Card Header */}
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
                           <div className="flex items-start gap-3">
                             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-2xl shrink-0 mt-0.5">
                               <Building2 className="w-6 h-6" />
@@ -542,11 +542,11 @@ export default function TeacherClassesSections({ currentUser }) {
 
                         {/* INNER SECTION CARDS GRID */}
                         <div className="mt-5">
-                          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+                          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3.5">
                             Assigned Sections ({deptCard.sections.length})
                           </span>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                             {deptCard.sections.map(section => {
                               const subjectsCount = section.subjectsCount || (section.teacherSubjects ? section.teacherSubjects.length : 0);
                               const studentCount = section.studentCount || 0;
@@ -555,7 +555,7 @@ export default function TeacherClassesSections({ currentUser }) {
                                 <div
                                   key={section._id}
                                   data-testid={`section-card-${section.section}`}
-                                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs hover:border-emerald-300 dark:hover:border-emerald-700/70 hover:shadow-sm transition-all duration-200 flex flex-col justify-between"
+                                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 min-h-[160px] shadow-xs hover:border-emerald-300 dark:hover:border-emerald-700/70 hover:shadow-sm transition-all duration-200 flex flex-col justify-between"
                                 >
                                   <div>
                                     {/* First row: Section name and Total enrolled students */}
@@ -587,7 +587,7 @@ export default function TeacherClassesSections({ currentUser }) {
                                   </div>
 
                                   {/* Bottom row: One full-width button labelled View Details */}
-                                  <div className="mt-4">
+                                  <div className="mt-4 pt-1">
                                     <button
                                       type="button"
                                       onClick={() => navigate(`/teacher/classes/${section._id}`)}

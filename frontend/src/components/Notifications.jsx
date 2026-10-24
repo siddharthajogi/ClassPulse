@@ -442,8 +442,8 @@ export default function Notifications() {
       </div>
 
       {/* 2. Overview Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 min-h-[105px] border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Notifications</p>
             <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">{counts.total}</p>
@@ -453,7 +453,7 @@ export default function Notifications() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 min-h-[105px] border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Unread Alerts</p>
             <p className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">{counts.unread}</p>
@@ -463,7 +463,7 @@ export default function Notifications() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 min-h-[105px] border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Read & Acknowledged</p>
             <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{counts.read}</p>
@@ -568,7 +568,7 @@ export default function Notifications() {
       </div>
 
       {/* 4. Notifications List */}
-      <div className="space-y-3">
+      <div className="space-y-3.5 sm:space-y-4">
         {loading ? (
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-slate-400 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
@@ -599,7 +599,7 @@ export default function Notifications() {
               <div
                 key={item._id}
                 onClick={() => handleNotificationClick(item)}
-                className={`group relative bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border transition-all duration-150 cursor-pointer ${
+                className={`group relative bg-white dark:bg-slate-900 rounded-2xl p-4.5 sm:p-5 sm:p-6 border transition-all duration-150 cursor-pointer ${
                   isSelected
                     ? 'border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/30 dark:ring-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/30 shadow-xs'
                     : !item.isRead

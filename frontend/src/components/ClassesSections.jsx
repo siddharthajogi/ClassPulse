@@ -1028,12 +1028,12 @@ export default function ClassesSections() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           {/* Card 1: Total Groups */}
           <button
             type="button"
             onClick={() => handleSummaryCardClick('all')}
-            className={`text-left p-5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+            className={`text-left p-5 sm:p-6 rounded-2xl border min-h-[118px] flex flex-col justify-between transition-all duration-200 cursor-pointer ${
               summaryFilter === 'all'
                 ? 'bg-white dark:bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/20 shadow-md'
                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 shadow-xs'
@@ -1199,7 +1199,7 @@ export default function ClassesSections() {
             return (
               <section
                 key={yearGroup.id}
-                className="bg-slate-50/60 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-5 sm:p-7 transition-colors duration-200"
+                className="bg-slate-50/60 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 transition-colors duration-200"
               >
                 {/* Academic Year Section Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-slate-200 dark:border-slate-800">
@@ -1262,10 +1262,10 @@ export default function ClassesSections() {
                     yearGroup.departments.map(deptCard => (
                       <div
                         key={deptCard.deptKey}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all p-5 sm:p-6"
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all p-6 sm:p-7"
                       >
                         {/* Department Card Header */}
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
                           <div className="flex items-start gap-3">
                             <div className="p-3 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0 mt-0.5">
                               <Building2 className="w-6 h-6" />
@@ -1329,11 +1329,11 @@ export default function ClassesSections() {
 
                         {/* Task 3 Critical Requirement: INNER SECTION CARDS GRID */}
                         <div className="mt-5">
-                          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+                          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3.5">
                             Configured Sections ({deptCard.sections.length})
                           </span>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                             {deptCard.sections.map(section => {
                               const metrics = calculateAssignmentMetrics(section.assignments);
                               const subjectsCount = section.subjectsCount !== undefined ? section.subjectsCount : metrics.subjectsCount;
@@ -1344,7 +1344,7 @@ export default function ClassesSections() {
                               return (
                                 <div
                                   key={section._id}
-                                  className={`p-4 rounded-xl border transition-all duration-150 flex flex-col justify-between ${
+                                  className={`p-4 sm:p-5 rounded-xl border min-h-[145px] transition-all duration-150 flex flex-col justify-between ${
                                     !isAssigned
                                       ? 'bg-amber-50/20 dark:bg-amber-950/10 border-amber-200/80 dark:border-amber-900/40 hover:border-amber-300'
                                       : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700'

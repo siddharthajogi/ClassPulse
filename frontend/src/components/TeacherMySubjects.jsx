@@ -271,16 +271,16 @@ export default function TeacherMySubjects({ currentUser }) {
         </div>
 
         {/* Cards Skeleton Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-7">
           {[1, 2, 3].map((n) => (
             <div
               key={n}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 animate-pulse space-y-4"
+              className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 min-h-[220px] border border-slate-200 dark:border-slate-800 animate-pulse space-y-4"
             >
-              <div className="pb-3.5 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="pb-4 border-b border-slate-100 dark:border-slate-800/80">
                 <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded-lg w-3/4" />
               </div>
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
                 <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
                 <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/5" />
@@ -472,7 +472,7 @@ export default function TeacherMySubjects({ currentUser }) {
         </div>
       ) : (
         /* 4. Subject Cards Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="subject-cards-grid">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-7" data-testid="subject-cards-grid">
           {filteredSubjects.map((subject) => {
             const displayName = formatField(subject.name);
             const displayCode = formatField(subject.code);
@@ -484,11 +484,11 @@ export default function TeacherMySubjects({ currentUser }) {
               <div
                 key={subject.id || subject.subjectId}
                 data-testid={`subject-card-${subject.code || subject.name}`}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md transition-all duration-200 hover:border-emerald-300 dark:hover:border-emerald-700/60 flex flex-col justify-between"
+                className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 min-h-[220px] border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md transition-all duration-200 hover:border-emerald-300 dark:hover:border-emerald-700/60 flex flex-col justify-between"
               >
                 <div>
                   {/* 1. Subject Name - Prominently at the top */}
-                  <div className="pb-3.5 mb-3.5 border-b border-slate-100 dark:border-slate-800/80">
+                  <div className="pb-4 mb-4 border-b border-slate-100 dark:border-slate-800/80">
                     <h2 
                       className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight line-clamp-2"
                       title={displayName}
@@ -499,7 +499,7 @@ export default function TeacherMySubjects({ currentUser }) {
                   </div>
 
                   {/* 2 to 5: Subject Details in strict required order */}
-                  <div className="space-y-2.5 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                  <div className="space-y-3 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                     {/* 2. Subject Code */}
                     <div className="flex items-center gap-2">
                       <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />

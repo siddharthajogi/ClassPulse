@@ -179,8 +179,8 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
             </div>
 
             {/* Academic Group Information Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs transition-colors">
-              <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-7 lg:p-8 shadow-xs transition-colors">
+              <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
                     <Layers className="w-5 h-5" />
@@ -201,8 +201,8 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
+                <div className="p-4 sm:p-4.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 min-h-[80px] flex flex-col justify-center">
                   <span className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                     Program / Course
                   </span>
@@ -211,7 +211,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                <div className="p-4 sm:p-4.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 min-h-[80px] flex flex-col justify-center">
                   <span className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                     Department
                   </span>
@@ -220,7 +220,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                <div className="p-4 sm:p-4.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 min-h-[80px] flex flex-col justify-center">
                   <span className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                     Academic Year
                   </span>
@@ -229,7 +229,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                <div className="p-4 sm:p-4.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 min-h-[80px] flex flex-col justify-center">
                   <span className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                     Semester
                   </span>
@@ -238,7 +238,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 col-span-2 sm:col-span-1">
+                <div className="p-4 sm:p-4.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 min-h-[80px] flex flex-col justify-center col-span-2 sm:col-span-1">
                   <span className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                     Section
                   </span>
@@ -250,7 +250,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
             </div>
 
             {/* Inherited Subjects & Teachers Section */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs transition-colors">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-7 lg:p-8 shadow-xs transition-colors">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
@@ -280,7 +280,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
               </div>
 
               {assignmentsPending || assignments.length === 0 ? (
-                <div className="p-8 text-center rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/10">
+                <div className="p-8 sm:p-10 text-center rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/10">
                   <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 rounded-2xl flex items-center justify-center mx-auto mb-3">
                     <Clock className="w-6 h-6" />
                   </div>
@@ -295,7 +295,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                   {assignments.map((asgn, idx) => {
                     const subj = asgn.subject || {};
                     const teacher = asgn.teacher || {};
@@ -305,11 +305,11 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                     return (
                       <div
                         key={asgn._id || idx}
-                        className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors shadow-2xs"
+                        className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors shadow-2xs"
                       >
                         <div>
                           {/* Subject Header */}
-                          <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex items-start justify-between gap-3 mb-2.5">
                             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400">
                               {subj.code || 'CODE'}
                             </span>
@@ -329,14 +329,14 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                             {subj.name || 'Subject Name'}
                           </h4>
                           {subj.description && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1.5">
                               {subj.description}
                             </p>
                           )}
                         </div>
 
                         {/* Teacher Card */}
-                        <div className="mt-4 pt-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                        <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-9 h-9 rounded-xl bg-indigo-600/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 font-bold text-xs">
                               <GraduationCap className="w-4 h-4" />
@@ -345,7 +345,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                               <span className="block text-xs font-bold text-slate-800 dark:text-slate-200 truncate" title={tName}>
                                 {tName}
                               </span>
-                              <span className="block text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                              <span className="block text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                                 {teacher.designation || 'Faculty'} • {teacher.department || student?.department}
                               </span>
                             </div>
@@ -370,8 +370,8 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
 
             {/* Academic Records / Historical Data Preservation Section */}
             {academicRecords.length > 0 && (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs transition-colors">
-                <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-7 lg:p-8 shadow-xs transition-colors">
+                <div className="flex items-center gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                   <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
                     <FileText className="w-5 h-5" />
                   </div>
@@ -389,11 +389,11 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                   <table className="w-full text-left text-xs whitespace-nowrap">
                     <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
                       <tr>
-                        <th className="px-4 py-3 font-semibold">Subject</th>
-                        <th className="px-4 py-3 font-semibold">Academic Year</th>
-                        <th className="px-4 py-3 font-semibold">Marks</th>
-                        <th className="px-4 py-3 font-semibold">Percentage</th>
-                        <th className="px-4 py-3 font-semibold">Attendance</th>
+                        <th className="px-5 py-3.5 font-semibold">Subject</th>
+                        <th className="px-5 py-3.5 font-semibold">Academic Year</th>
+                        <th className="px-5 py-3.5 font-semibold">Marks</th>
+                        <th className="px-5 py-3.5 font-semibold">Percentage</th>
+                        <th className="px-5 py-3.5 font-semibold">Attendance</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -401,17 +401,17 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                         const pct = rec.totalMarks > 0 ? Math.round((rec.marksObtained / rec.totalMarks) * 100) : 0;
                         return (
                           <tr key={rec._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                            <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
+                            <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
                               {rec.subject?.code} - {rec.subject?.name}
                             </td>
-                            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                            <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">
                               {rec.academicYear?.year || '—'}
                             </td>
-                            <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
+                            <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
                               {rec.marksObtained} / {rec.totalMarks}
                             </td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            <td className="px-5 py-3.5">
+                              <span className={`inline-flex px-2.5 py-0.5 rounded text-[11px] font-semibold ${
                                 pct >= 75
                                   ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
                                   : pct >= 50
@@ -421,7 +421,7 @@ export default function StudentDashboard({ user, onPasswordChanged, onLogout }) 
                                 {pct}%
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                            <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">
                               {rec.attendancePercentage}%
                             </td>
                           </tr>

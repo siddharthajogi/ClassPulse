@@ -104,11 +104,11 @@ export default function LoginCard({ role, onLoginSuccess }) {
 
   return (
     <div
-      className={`bg-white dark:bg-slate-900 rounded-2xl border ${meta.accentColor} shadow-sm hover:shadow-md transition-all duration-200 p-6 sm:p-7 flex flex-col justify-between`}
+      className={`bg-white dark:bg-slate-900 rounded-2xl border ${meta.accentColor} shadow-sm hover:shadow-md transition-all duration-200 p-6 sm:p-8 flex flex-col justify-between`}
     >
       <div>
         {/* Card Header */}
-        <div className="flex items-center gap-3.5 mb-5">
+        <div className="flex items-center gap-3.5 mb-6">
           <div className={`p-3 rounded-xl ${meta.iconBg}`}>
             <RoleIcon className="w-6 h-6" />
           </div>
@@ -131,7 +131,7 @@ export default function LoginCard({ role, onLoginSuccess }) {
         )}
 
         {/* Independent Login Form */}
-        <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+        <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
           {/* Hidden decoy fields to intercept browser autofill engines */}
           <input
             type="text"
