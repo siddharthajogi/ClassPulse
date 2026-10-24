@@ -23,10 +23,10 @@ import {
 
 // Academic years of study in canonical order matching Admin Portal
 const ACADEMIC_YEARS_ORDER = [
-  { id: 'First Year', label: 'First Year', defaultSemesters: ['1st', '2nd'] },
-  { id: 'Second Year', label: 'Second Year', defaultSemesters: ['3rd', '4th'] },
-  { id: 'Third Year', label: 'Third Year', defaultSemesters: ['5th', '6th'] },
-  { id: 'Fourth Year', label: 'Fourth Year', defaultSemesters: ['7th', '8th'] },
+  { id: 'First Year', label: 'First Year', yearNumber: 1, defaultSemesters: ['1st', '2nd'] },
+  { id: 'Second Year', label: 'Second Year', yearNumber: 2, defaultSemesters: ['3rd', '4th'] },
+  { id: 'Third Year', label: 'Third Year', yearNumber: 3, defaultSemesters: ['5th', '6th'] },
+  { id: 'Fourth Year', label: 'Fourth Year', yearNumber: 4, defaultSemesters: ['7th', '8th'] },
 ];
 
 export default function TeacherClassesSections({ currentUser }) {
@@ -148,8 +148,13 @@ export default function TeacherClassesSections({ currentUser }) {
         c.department === departmentFilter ||
         departments.some(d => d.code === departmentFilter && (c.department === d.name || c.department === d.code));
 
-      // 4. Academic year dropdown filter
-      const matchesYear = yearFilter === 'all' || c.academicYear === yearFilter;
+      // 4. Academic year of study filter
+      const matchesYear = yearFilter === 'all' ||
+        c.yearOfStudy === yearFilter ||
+        (yearFilter === 'First Year' && (c.yearOfStudy === '1st Year' || c.semester === '1st' || c.semester === '2nd')) ||
+        (yearFilter === 'Second Year' && (c.yearOfStudy === '2nd Year' || c.semester === '3rd' || c.semester === '4th')) ||
+        (yearFilter === 'Third Year' && (c.yearOfStudy === '3rd Year' || c.semester === '5th' || c.semester === '6th')) ||
+        (yearFilter === 'Fourth Year' && (c.yearOfStudy === '4th Year' || c.semester === '7th' || c.semester === '8th'));
 
       return matchesSearch && matchesSummary && matchesDept && matchesYear;
     });
@@ -170,22 +175,30 @@ export default function TeacherClassesSections({ currentUser }) {
     return list;
   }, [departments]);
 
-  const calendarYearOptions = useMemo(() => {
-    const list = [{ value: 'all', label: 'All Calendar Years' }];
-    academicYears.forEach(ay => {
-      list.push({
-        value: ay.year,
-        label: ay.year,
-      });
-    });
-    return list;
-  }, [academicYears]);
+  // Exactly 5 options for Academic Year of study filter
+  const yearDropdownOptions = useMemo(() => [
+    { value: 'all', label: 'All Years' },
+    { value: 'First Year', label: 'First Year' },
+    { value: 'Second Year', label: 'Second Year' },
+    { value: 'Third Year', label: 'Third Year' },
+    { value: 'Fourth Year', label: 'Fourth Year' },
+  ], []);
 
-  // Build Academic Hierarchy: 4 Academic Years -> Departments -> Inner Sections Grid
+  // Build Academic Hierarchy: Academic Years -> Departments -> Inner Sections Grid
   const academicYearHierarchy = useMemo(() => {
-    return ACADEMIC_YEARS_ORDER.map(yearMeta => {
+    const targetYears = yearFilter === 'all'
+      ? ACADEMIC_YEARS_ORDER
+      : ACADEMIC_YEARS_ORDER.filter(yearMeta => yearMeta.id === yearFilter);
+
+    return targetYears.map(yearMeta => {
       // Find all sections belonging to this year of study
-      const yearSections = filteredClasses.filter(c => c.yearOfStudy === yearMeta.id);
+      const yearSections = filteredClasses.filter(c =>
+        c.yearOfStudy === yearMeta.id ||
+        (yearMeta.id === 'First Year' && (c.yearOfStudy === '1st Year' || c.semester === '1st' || c.semester === '2nd')) ||
+        (yearMeta.id === 'Second Year' && (c.yearOfStudy === '2nd Year' || c.semester === '3rd' || c.semester === '4th')) ||
+        (yearMeta.id === 'Third Year' && (c.yearOfStudy === '3rd Year' || c.semester === '5th' || c.semester === '6th')) ||
+        (yearMeta.id === 'Fourth Year' && (c.yearOfStudy === '4th Year' || c.semester === '7th' || c.semester === '8th'))
+      );
 
       // Group sections by department inside this year
       const deptMap = {};
@@ -239,7 +252,7 @@ export default function TeacherClassesSections({ currentUser }) {
         totalStudents: totalYearStudents
       };
     });
-  }, [filteredClasses, getDeptInfo]);
+  }, [filteredClasses, getDeptInfo, yearFilter]);
 
   // Loading skeleton state
   if (loading) {
@@ -388,21 +401,19 @@ export default function TeacherClassesSections({ currentUser }) {
             menuClassName="w-full sm:w-[320px]"
           />
 
-          {/* Academic Calendar Year Filter */}
-          {academicYears.length > 0 && (
-            <TeacherDropdown
-              id="teacher-classes-year-filter"
-              data-testid="teacher-classes-year-filter"
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              options={calendarYearOptions}
-              placeholder="All Calendar Years"
-              title="Filter by Calendar Year"
-              icon={Calendar}
-              className="w-full sm:w-auto min-w-[170px]"
-              menuClassName="w-full sm:w-[220px]"
-            />
-          )}
+          {/* Academic Year Filter */}
+          <TeacherDropdown
+            id="teacher-classes-year-filter"
+            data-testid="teacher-classes-year-filter"
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            options={yearDropdownOptions}
+            placeholder="All Years"
+            title="Filter by Year"
+            icon={Calendar}
+            className="w-full sm:w-auto min-w-[170px]"
+            menuClassName="w-full sm:w-[220px]"
+          />
         </div>
       </div>
 
@@ -452,7 +463,7 @@ export default function TeacherClassesSections({ currentUser }) {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-slate-200 dark:border-slate-800">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                      {yearIndex + 1}
+                      {yearGroup.yearNumber || (yearIndex + 1)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
