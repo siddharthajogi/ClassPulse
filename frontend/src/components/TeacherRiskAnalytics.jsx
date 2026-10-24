@@ -628,7 +628,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Total Cohort Students
+              Total Students
             </span>
             <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
               <Users className="w-4 h-4" />
@@ -712,14 +712,14 @@ export default function TeacherRiskAnalytics({ currentUser }) {
         </div>
       </div>
 
-      {/* Cohort Averages Strip */}
+      {/* Averages Overview Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-800">
             <CalendarCheck className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-slate-400">Cohort Avg Attendance</span>
+            <span className="text-slate-400">Average Attendance</span>
             <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
               {summary.averageAttendance !== null ? `${summary.averageAttendance}%` : '—'}
             </p>
@@ -731,7 +731,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
             <GraduationCap className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-slate-400">Cohort Avg Assessment Score</span>
+            <span className="text-slate-400">Average Assessment Score</span>
             <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
               {summary.averagePerformance !== null ? `${summary.averagePerformance}%` : '—'}
             </p>
@@ -870,7 +870,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
                 Assessment Performance Bands
               </h3>
               <p className="text-[11px] text-slate-400">
-                Evaluation marks breakdown across cohort
+                Evaluation marks breakdown across selected students
               </p>
             </div>
             <GraduationCap className="w-4 h-4 text-emerald-600" />

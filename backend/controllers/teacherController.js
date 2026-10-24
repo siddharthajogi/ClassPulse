@@ -2118,15 +2118,38 @@ exports.getTeacherRiskAnalytics = async (req, res) => {
       }
     }
 
-    const totalStudents = studentDocs.length;
-    const avgAttendance = studentsWithAttendance > 0
-      ? Math.round((totalAssessedAttendance / studentsWithAttendance) * 10) / 10
+    // Calculate metrics for the active selected student scope
+    let activeAssessedAttendance = 0;
+    let activeStudentsWithAttendance = 0;
+    let activeAssessedPerformance = 0;
+    let activeStudentsWithPerformance = 0;
+    let activeRiskScores = 0;
+    let activeStudentsWithRisk = 0;
+
+    filteredStudents.forEach(s => {
+      if (typeof s.attendancePercentage === 'number') {
+        activeAssessedAttendance += s.attendancePercentage;
+        activeStudentsWithAttendance++;
+      }
+      if (typeof s.assessmentScore === 'number') {
+        activeAssessedPerformance += s.assessmentScore;
+        activeStudentsWithPerformance++;
+      }
+      if (typeof s.riskScore === 'number') {
+        activeRiskScores += s.riskScore;
+        activeStudentsWithRisk++;
+      }
+    });
+
+    const totalStudents = filteredStudents.length;
+    const avgAttendance = activeStudentsWithAttendance > 0
+      ? Math.round((activeAssessedAttendance / activeStudentsWithAttendance) * 10) / 10
       : null;
-    const avgPerformance = studentsWithPerformance > 0
-      ? Math.round((totalAssessedPerformance / studentsWithPerformance) * 10) / 10
+    const avgPerformance = activeStudentsWithPerformance > 0
+      ? Math.round((activeAssessedPerformance / activeStudentsWithPerformance) * 10) / 10
       : null;
-    const avgRiskScore = studentsWithRiskScores > 0
-      ? Math.round(totalRiskScores / studentsWithRiskScores)
+    const avgRiskScore = activeStudentsWithRisk > 0
+      ? Math.round(activeRiskScores / activeStudentsWithRisk)
       : null;
 
     // Charts payload (compatible with Recharts & EduRiskMonitor style)
