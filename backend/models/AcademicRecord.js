@@ -9,6 +9,8 @@ const academicRecordSchema = new mongoose.Schema({
   marksObtained: { type: Number, required: true },
   totalMarks: { type: Number, required: true },
   attendancePercentage: { type: Number },
+  classesAttended: { type: Number },
+  totalClassesHeld: { type: Number },
   recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 

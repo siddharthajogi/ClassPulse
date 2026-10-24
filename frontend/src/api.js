@@ -314,6 +314,18 @@ export const teacherApi = {
   updateTeacherProfile: async (profileData) => {
     const response = await api.put('/teacher/profile', profileData);
     return response.data;
+  },
+  getStudents: async (params = {}) => {
+    const response = await api.get('/teacher/students', { params });
+    return response.data;
+  },
+  getStudentDetails: async (studentId) => {
+    const response = await api.get(`/teacher/students/${studentId}`);
+    return response.data;
+  },
+  recordStudentAttendance: async (studentId, data) => {
+    const response = await api.post(`/teacher/students/${studentId}/record`, data);
+    return response.data;
   }
 };
 

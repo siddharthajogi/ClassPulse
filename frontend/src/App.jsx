@@ -52,6 +52,7 @@ import TeacherDashboardOverview from './components/TeacherDashboardOverview';
 import TeacherMySubjects from './components/TeacherMySubjects';
 import TeacherClassesSections from './components/TeacherClassesSections';
 import TeacherSectionDetails from './components/TeacherSectionDetails';
+import TeacherStudents from './components/TeacherStudents';
 import TeacherPlaceholder from './components/TeacherPlaceholder';
 import TeacherProfilePage from './components/TeacherProfilePage';
 import TeacherNotifications from './components/TeacherNotifications';
@@ -244,13 +245,7 @@ export default function App() {
         />
         <Route
           path="students"
-          element={
-            <TeacherPlaceholder
-              title="Students"
-              icon={Users}
-              description="Directory of enrolled students across your assigned sections with individual profiles."
-            />
-          }
+          element={<TeacherStudents currentUser={currentUser} />}
         />
         <Route
           path="risk-analytics"

@@ -10,6 +10,12 @@ const Class = require('../models/Class');
 const Department = require('../models/Department');
 const Institution = require('../models/Institution');
 const User = require('../models/User');
+const {
+  calculateAttendanceFromRecords,
+  calculateAssessmentFromRecords,
+  calculateExplainableRiskScore,
+  syncStudentMetricsAndRisk
+} = require('../services/studentAnalyticsService');
 
 /**
  * @route   GET /api/teacher/dashboard/analytics
@@ -1257,5 +1263,501 @@ exports.updateTeacherProfile = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to update teacher profile' });
   }
 };
+
+/**
+ * @route   GET /api/teacher/students
+ * @desc    Get enrolled students directory for the authenticated teacher's assigned sections
+ *          Includes calculated attendance percentage and explainable risk score
+ * @access  Private (Teacher only)
+ */
+exports.getTeacherStudents = async (req, res) => {
+  try {
+    const institutionId = req.currentUser.institution?._id || req.currentUser.institution;
+    const userId = req.currentUser._id;
+
+    const teacherProfile = await TeacherProfile.findOne({
+      user: userId,
+      institution: institutionId
+    });
+
+    if (!teacherProfile) {
+      return res.status(403).json({ success: false, error: 'Unauthorized: Teacher profile not found.' });
+    }
+
+    // 1. Fetch all active TeachingAssignments for this teacher in this institution
+    const assignments = await TeachingAssignment.find({
+      teacher: teacherProfile._id,
+      institution: institutionId,
+      isActive: true
+    }).populate('classRef', 'name course department academicYear semester section yearOfStudy isActive');
+
+    const assignedClassIds = [];
+    const assignedClassMap = new Map();
+
+    assignments.forEach(a => {
+      if (a.classRef && a.classRef.isActive !== false) {
+        const cid = a.classRef._id.toString();
+        if (!assignedClassMap.has(cid)) {
+          assignedClassIds.push(a.classRef._id);
+          const normalizedYear = normalizeYearOfStudy(a.classRef.yearOfStudy, a.classRef.semester);
+          assignedClassMap.set(cid, {
+            ...a.classRef.toObject(),
+            yearOfStudy: a.classRef.yearOfStudy || normalizedYear
+          });
+        }
+      }
+    });
+
+    if (assignedClassIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        students: [],
+        total: 0
+      });
+    }
+
+    // 2. Filter target classes based on query params: yearOfStudy, department, classId
+    const { yearOfStudy, department, classId } = req.query;
+    let targetClassIds = assignedClassIds;
+
+    // Security check: if classId is specified, verify teacher is authorized for that class
+    if (classId && classId !== 'all') {
+      const matchCid = assignedClassIds.find(id => id.toString() === classId);
+      if (!matchCid) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized: You are not assigned to this section.'
+        });
+      }
+      targetClassIds = [matchCid];
+    } else {
+      // Filter by yearOfStudy and/or department if supplied
+      if (yearOfStudy && yearOfStudy !== 'all') {
+        targetClassIds = targetClassIds.filter(cid => {
+          const c = assignedClassMap.get(cid.toString());
+          return c && (c.yearOfStudy === yearOfStudy || normalizeYearOfStudy(c.yearOfStudy, c.semester) === yearOfStudy);
+        });
+      }
+
+      if (department && department !== 'all') {
+        targetClassIds = targetClassIds.filter(cid => {
+          const c = assignedClassMap.get(cid.toString());
+          return c && c.department && (c.department.toLowerCase() === department.toLowerCase() || (c.departmentRef && c.departmentRef.code && c.departmentRef.code.toLowerCase() === department.toLowerCase()));
+        });
+      }
+    }
+
+    if (targetClassIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        students: [],
+        total: 0
+      });
+    }
+
+    // 3. Query enrolled students in the filtered target classes
+    const studentDocs = await StudentProfile.find({
+      classRef: { $in: targetClassIds },
+      institution: institutionId
+    })
+      .populate('user', 'userId name email isActive')
+      .populate('departmentRef', 'name code')
+      .populate('classRef', 'name course department academicYear semester section yearOfStudy')
+      .sort({ studentId: 1, 'personalInfo.name': 1 });
+
+    const studentIds = studentDocs.map(s => s._id);
+
+    // 4. Batch fetch AcademicRecords and RiskPredictions for these students
+    const [academicRecords, riskPredictions] = await Promise.all([
+      AcademicRecord.find({
+        student: { $in: studentIds },
+        institution: institutionId
+      }),
+      RiskPrediction.find({
+        student: { $in: studentIds },
+        institution: institutionId
+      })
+    ]);
+
+    // Map records by studentId
+    const recordsByStudent = new Map();
+    academicRecords.forEach(r => {
+      const sid = r.student.toString();
+      if (!recordsByStudent.has(sid)) recordsByStudent.set(sid, []);
+      recordsByStudent.get(sid).push(r);
+    });
+
+    // Map predictions by studentId
+    const predictionsByStudent = new Map();
+    riskPredictions.forEach(p => {
+      const sid = p.student.toString();
+      predictionsByStudent.set(sid, p);
+    });
+
+    // 5. Enrich students with calculated Attendance Percentage and Explainable Risk Score
+    const enrichedStudents = studentDocs.map(s => {
+      const sid = s._id.toString();
+      const sRecords = recordsByStudent.get(sid) || [];
+      const sPrediction = predictionsByStudent.get(sid);
+
+      // End-to-end Attendance Percentage calculation
+      const { attendancePercentage, classesAttended, totalClassesHeld } =
+        calculateAttendanceFromRecords(sRecords);
+
+      // Assessment average
+      const { assessmentScore } = calculateAssessmentFromRecords(sRecords);
+
+      // Explainable Risk Score calculation or retrieved stored prediction
+      let riskScore = null;
+      let riskLevel = null;
+      let riskFactors = [];
+
+      if (sPrediction && typeof sPrediction.score === 'number') {
+        riskScore = sPrediction.score;
+        riskLevel = sPrediction.riskLevel || 'low';
+        riskFactors = sPrediction.factors || [];
+      } else {
+        const computedRisk = calculateExplainableRiskScore(attendancePercentage, assessmentScore);
+        if (computedRisk.hasData) {
+          riskScore = computedRisk.score;
+          riskLevel = computedRisk.riskLevel;
+          riskFactors = computedRisk.factors;
+        }
+      }
+
+      const sClass = s.classRef || assignedClassMap.get(s.classRef?._id?.toString() || s.classRef?.toString());
+      const studentYear = s.yearOfStudy || sClass?.yearOfStudy || normalizeYearOfStudy(s.yearOfStudy, s.semester || sClass?.semester);
+
+      return {
+        _id: s._id,
+        studentId: s.studentId || s.user?.userId || '—',
+        name: s.user?.name || s.personalInfo?.name || '—',
+        email: s.personalInfo?.email || s.user?.email || '—',
+        phone: s.personalInfo?.phone || '',
+        department: s.department || sClass?.department || '—',
+        yearOfStudy: studentYear || '—',
+        section: s.section || sClass?.section || '—',
+        course: s.course || sClass?.course || 'B.Tech',
+        semester: s.semester || sClass?.semester || '—',
+        academicYear: s.academicYear || sClass?.academicYear || '—',
+        classRef: s.classRef ? (s.classRef._id || s.classRef) : null,
+        attendancePercentage, // number e.g. 85.5 or null
+        classesAttended,
+        totalClassesHeld,
+        riskScore, // number e.g. 25 or null
+        riskLevel, // 'low' | 'medium' | 'high' | null
+        riskFactors,
+        isActive: s.user?.isActive ?? true
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      students: enrichedStudents,
+      total: enrichedStudents.length
+    });
+  } catch (error) {
+    console.error('getTeacherStudents error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch students directory.'
+    });
+  }
+};
+
+/**
+ * @route   GET /api/teacher/students/:studentId
+ * @desc    Get detailed student profile and records for teacher inspection
+ * @access  Private (Teacher only)
+ */
+exports.getTeacherStudentDetails = async (req, res) => {
+  try {
+    const institutionId = req.currentUser.institution?._id || req.currentUser.institution;
+    const userId = req.currentUser._id;
+    const { studentId } = req.params;
+
+    const teacherProfile = await TeacherProfile.findOne({
+      user: userId,
+      institution: institutionId
+    });
+
+    if (!teacherProfile) {
+      return res.status(403).json({ success: false, error: 'Unauthorized: Teacher profile not found.' });
+    }
+
+    const student = await StudentProfile.findOne({
+      _id: studentId,
+      institution: institutionId
+    })
+      .populate('user', 'userId name email isActive createdAt')
+      .populate('classRef', 'name course department academicYear semester section yearOfStudy')
+      .populate('departmentRef', 'name code');
+
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student not found.' });
+    }
+
+    // Security: Check teacher is assigned to student's section
+    const studentClassId = student.classRef?._id || student.classRef;
+    if (!studentClassId) {
+      return res.status(403).json({ success: false, error: 'Student is not enrolled in an active section.' });
+    }
+
+    const isAssigned = await TeachingAssignment.exists({
+      teacher: teacherProfile._id,
+      classRef: studentClassId,
+      institution: institutionId,
+      isActive: true
+    });
+
+    if (!isAssigned) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: You do not have permission to view this student.'
+      });
+    }
+
+    // Fetch subjects taught by this teacher in this section
+    const teacherAssignments = await TeachingAssignment.find({
+      teacher: teacherProfile._id,
+      classRef: studentClassId,
+      institution: institutionId,
+      isActive: true
+    }).populate('subject', 'name code credits department subjectType semester isActive');
+
+    const teacherSubjects = [];
+    teacherAssignments.forEach(a => {
+      if (a.subject && a.subject.isActive !== false) {
+        teacherSubjects.push({
+          _id: a.subject._id,
+          name: a.subject.name,
+          code: a.subject.code,
+          credits: a.subject.credits,
+          subjectType: a.subject.subjectType
+        });
+      }
+    });
+
+    // Fetch academic records for this student
+    const records = await AcademicRecord.find({
+      student: student._id,
+      institution: institutionId
+    })
+      .populate('subject', 'name code')
+      .populate('academicYear', 'year')
+      .sort({ updatedAt: -1 });
+
+    const { attendancePercentage, classesAttended, totalClassesHeld } =
+      calculateAttendanceFromRecords(records);
+    const { assessmentScore } = calculateAssessmentFromRecords(records);
+    const riskResult = calculateExplainableRiskScore(attendancePercentage, assessmentScore);
+
+    const sClass = student.classRef;
+    const studentYear = student.yearOfStudy || sClass?.yearOfStudy || normalizeYearOfStudy(student.yearOfStudy, student.semester || sClass?.semester);
+
+    return res.status(200).json({
+      success: true,
+      student: {
+        _id: student._id,
+        studentId: student.studentId || student.user?.userId || '—',
+        name: student.user?.name || student.personalInfo?.name || '—',
+        email: student.personalInfo?.email || student.user?.email || '—',
+        phone: student.personalInfo?.phone || '',
+        dateOfBirth: student.personalInfo?.dateOfBirth,
+        address: student.personalInfo?.address || '',
+        department: student.department || sClass?.department || '—',
+        yearOfStudy: studentYear,
+        section: student.section || sClass?.section || '—',
+        course: student.course || sClass?.course || 'B.Tech',
+        semester: student.semester || sClass?.semester || '—',
+        academicYear: student.academicYear || sClass?.academicYear || '—',
+        classRef: student.classRef,
+        attendancePercentage,
+        classesAttended,
+        totalClassesHeld,
+        assessmentScore,
+        riskScore: riskResult.score,
+        riskLevel: riskResult.riskLevel,
+        riskFactors: riskResult.factors,
+        records,
+        teacherSubjects
+      }
+    });
+  } catch (error) {
+    console.error('getTeacherStudentDetails error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch student details.' });
+  }
+};
+
+/**
+ * @route   POST /api/teacher/students/:studentId/record
+ * @desc    Record or update attendance and assessment marks for a student
+ *          Recalculates attendance percentage & risk score, updates RiskPrediction
+ * @access  Private (Teacher only)
+ */
+exports.recordStudentAttendanceAndMarks = async (req, res) => {
+  try {
+    const institutionId = req.currentUser.institution?._id || req.currentUser.institution;
+    const userId = req.currentUser._id;
+    const { studentId } = req.params;
+    const {
+      subjectId,
+      classesAttended,
+      totalClassesHeld,
+      marksObtained,
+      totalMarks,
+      termId
+    } = req.body;
+
+    if (!subjectId) {
+      return res.status(400).json({ success: false, error: 'Subject ID is required.' });
+    }
+
+    const teacherProfile = await TeacherProfile.findOne({
+      user: userId,
+      institution: institutionId
+    });
+
+    if (!teacherProfile) {
+      return res.status(403).json({ success: false, error: 'Unauthorized: Teacher profile not found.' });
+    }
+
+    const student = await StudentProfile.findOne({
+      _id: studentId,
+      institution: institutionId
+    }).populate('classRef');
+
+    if (!student || !student.classRef) {
+      return res.status(404).json({ success: false, error: 'Student or enrolled section not found.' });
+    }
+
+    // Security check: teacher must be assigned to student's class and subject
+    const isAssigned = await TeachingAssignment.exists({
+      teacher: teacherProfile._id,
+      classRef: student.classRef._id,
+      subject: subjectId,
+      institution: institutionId,
+      isActive: true
+    });
+
+    if (!isAssigned) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: You are not assigned to teach this subject in this student’s section.'
+      });
+    }
+
+    // Validate attendance numbers
+    let computedAttendancePct = null;
+    let attendedNum = null;
+    let heldNum = null;
+    if (totalClassesHeld !== undefined && totalClassesHeld !== null && totalClassesHeld !== '') {
+      heldNum = Number(totalClassesHeld);
+      attendedNum = Number(classesAttended || 0);
+
+      if (isNaN(heldNum) || isNaN(attendedNum) || heldNum <= 0 || attendedNum < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Total classes held must be greater than 0, and classes attended cannot be negative.'
+        });
+      }
+
+      if (attendedNum > heldNum) {
+        return res.status(400).json({
+          success: false,
+          error: 'Classes attended cannot exceed total classes held.'
+        });
+      }
+
+      // Formula: (Classes Attended ÷ Total Classes Held) × 100
+      computedAttendancePct = Math.min(100, Math.max(0, Math.round((attendedNum / heldNum) * 100 * 10) / 10));
+    }
+
+    // Validate marks numbers
+    let marksObtainedNum = null;
+    let totalMarksNum = null;
+    if (totalMarks !== undefined && totalMarks !== null && totalMarks !== '') {
+      totalMarksNum = Number(totalMarks);
+      marksObtainedNum = Number(marksObtained || 0);
+
+      if (isNaN(totalMarksNum) || isNaN(marksObtainedNum) || totalMarksNum <= 0 || marksObtainedNum < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Total marks must be greater than 0, and marks obtained cannot be negative.'
+        });
+      }
+
+      if (marksObtainedNum > totalMarksNum) {
+        return res.status(400).json({
+          success: false,
+          error: 'Marks obtained cannot exceed total marks.'
+        });
+      }
+    }
+
+    // Resolve AcademicYear document
+    let academicYearDoc = await AcademicYear.findOne({
+      institution: institutionId,
+      isCurrent: true
+    });
+    if (!academicYearDoc) {
+      academicYearDoc = await AcademicYear.findOne({ institution: institutionId });
+    }
+
+    // Create or update AcademicRecord
+    const query = {
+      institution: institutionId,
+      student: student._id,
+      subject: subjectId
+    };
+    if (academicYearDoc) query.academicYear = academicYearDoc._id;
+    if (termId) query.termId = termId;
+
+    const updateDoc = {
+      institution: institutionId,
+      student: student._id,
+      subject: subjectId,
+      academicYear: academicYearDoc ? academicYearDoc._id : undefined,
+      termId: termId || undefined,
+      recordedBy: userId
+    };
+
+    if (computedAttendancePct !== null) {
+      updateDoc.attendancePercentage = computedAttendancePct;
+      updateDoc.classesAttended = attendedNum;
+      updateDoc.totalClassesHeld = heldNum;
+    }
+
+    if (marksObtainedNum !== null) {
+      updateDoc.marksObtained = marksObtainedNum;
+      updateDoc.totalMarks = totalMarksNum;
+    } else {
+      updateDoc.$setOnInsert = { marksObtained: 0, totalMarks: 100 };
+    }
+
+    const savedRecord = await AcademicRecord.findOneAndUpdate(
+      query,
+      updateDoc,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // End-to-End calculation: Sync attendance and RiskScore in DB
+    const updatedMetrics = await syncStudentMetricsAndRisk(student._id, institutionId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Attendance and assessment records updated successfully.',
+      record: savedRecord,
+      metrics: updatedMetrics
+    });
+  } catch (error) {
+    console.error('recordStudentAttendanceAndMarks error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to record student attendance and marks.'
+    });
+  }
+};
+
 
 

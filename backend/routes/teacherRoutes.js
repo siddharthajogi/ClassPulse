@@ -39,10 +39,28 @@ router.get('/classes', teacherController.getMyClasses);
 router.get('/classes/:id', teacherController.getClassDetails);
 
 /**
+ * @route   GET /api/teacher/students
+ * @desc    Get all students across assigned sections with attendance & risk score
+ */
+router.get('/students', teacherController.getTeacherStudents);
+
+/**
  * @route   GET /api/teacher/students/sections/:id
  * @desc    Get details and enrolled students roster for an assigned section in Students navigation
  */
 router.get('/students/sections/:id', teacherController.getClassDetails);
+
+/**
+ * @route   GET /api/teacher/students/:studentId
+ * @desc    Get student profile details and academic records
+ */
+router.get('/students/:studentId', teacherController.getTeacherStudentDetails);
+
+/**
+ * @route   POST /api/teacher/students/:studentId/record
+ * @desc    Record or update attendance and assessment marks with automatic risk recalculation
+ */
+router.post('/students/:studentId/record', teacherController.recordStudentAttendanceAndMarks);
 
 /**
  * @route   GET /api/teacher/profile
