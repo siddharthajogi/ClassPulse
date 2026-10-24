@@ -32,7 +32,17 @@ import CollegeSettings from './components/CollegeSettings';
 import GeneralSettings from './components/GeneralSettings';
 import SubjectList from './components/SubjectList';
 import ClassesSections from './components/ClassesSections';
-import StudentDashboard from './components/StudentDashboard';
+import StudentLayout from './components/StudentLayout';
+import StudentDashboardOverview from './components/StudentDashboardOverview';
+import StudentMySubjects from './components/StudentMySubjects';
+import StudentAcademicRecords from './components/StudentAcademicRecords';
+import StudentAttendance from './components/StudentAttendance';
+import StudentAssignments from './components/StudentAssignments';
+import StudentLearningProgress from './components/StudentLearningProgress';
+import StudentPersonalizedLearning from './components/StudentPersonalizedLearning';
+import StudentInterventions from './components/StudentInterventions';
+import StudentNotifications from './components/StudentNotifications';
+import StudentProfilePage from './components/StudentProfilePage';
 import ActiveAccountsList from './components/ActiveAccountsList';
 import Notifications from './components/Notifications';
 import AdminProfile from './components/AdminProfile';
@@ -186,11 +196,34 @@ export default function App() {
       } />
 
       {/* Student Protected Routes */}
-      <Route path="/student/*" element={
+      <Route path="/student" element={
         <ProtectedRoute currentUser={currentUser} allowedRoles={['student']}>
-          <StudentDashboard user={currentUser} onPasswordChanged={handlePasswordChanged} onLogout={handleLogout} />
+          <StudentLayout onLogout={handleLogout} currentUser={currentUser} />
         </ProtectedRoute>
-      } />
+      }>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<StudentDashboardOverview currentUser={currentUser} />} />
+        <Route path="subjects" element={<StudentMySubjects currentUser={currentUser} />} />
+        <Route path="academic-records" element={<StudentAcademicRecords currentUser={currentUser} />} />
+        <Route path="attendance" element={<StudentAttendance currentUser={currentUser} />} />
+        <Route path="assignments" element={<StudentAssignments currentUser={currentUser} />} />
+        <Route path="learning-progress" element={<StudentLearningProgress currentUser={currentUser} />} />
+        <Route path="personalized-learning" element={<StudentPersonalizedLearning currentUser={currentUser} />} />
+        <Route path="interventions" element={<StudentInterventions currentUser={currentUser} />} />
+        <Route path="learning-support" element={<Navigate to="interventions" replace />} />
+        <Route path="notifications" element={<StudentNotifications currentUser={currentUser} />} />
+        <Route
+          path="profile"
+          element={
+            <StudentProfilePage
+              currentUser={currentUser}
+              onPasswordChanged={handlePasswordChanged}
+              onLogout={handleLogout}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="dashboard" replace />} />
+      </Route>
 
       {/* Teacher Protected Routes */}
       <Route path="/teacher" element={

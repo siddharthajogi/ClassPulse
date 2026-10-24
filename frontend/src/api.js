@@ -251,6 +251,26 @@ export const studentApi = {
   getDashboard: async () => {
     const response = await api.get('/student/dashboard');
     return response.data;
+  },
+  getProfile: async () => {
+    const response = await api.get('/student/profile');
+    return response.data;
+  },
+  updateProfile: async (profileData) => {
+    const response = await api.put('/student/profile', profileData);
+    return response.data;
+  },
+  getNotifications: async () => {
+    const response = await api.get('/student/notifications');
+    return response.data;
+  },
+  markNotificationAsRead: async (id) => {
+    const response = await api.patch(`/student/notifications/${id}/read`);
+    return response.data;
+  },
+  markAllNotificationsAsRead: async () => {
+    const response = await api.patch('/student/notifications/mark-all-read');
+    return response.data;
   }
 };
 
