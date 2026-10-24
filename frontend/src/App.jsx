@@ -53,6 +53,7 @@ import TeacherMySubjects from './components/TeacherMySubjects';
 import TeacherClassesSections from './components/TeacherClassesSections';
 import TeacherSectionDetails from './components/TeacherSectionDetails';
 import TeacherStudents from './components/TeacherStudents';
+import TeacherRiskAnalytics from './components/TeacherRiskAnalytics';
 import TeacherPlaceholder from './components/TeacherPlaceholder';
 import TeacherProfilePage from './components/TeacherProfilePage';
 import TeacherNotifications from './components/TeacherNotifications';
@@ -249,13 +250,7 @@ export default function App() {
         />
         <Route
           path="risk-analytics"
-          element={
-            <TeacherPlaceholder
-              title="Student Risk Analytics"
-              icon={Activity}
-              description="AI-driven early risk radar, attendance alerts, and academic drop-off predictors."
-            />
-          }
+          element={<TeacherRiskAnalytics currentUser={currentUser} />}
         />
         <Route
           path="knowledge-gaps"

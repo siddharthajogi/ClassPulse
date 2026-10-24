@@ -166,7 +166,8 @@ function calculateExplainableRiskScore(attendancePercentage, assessmentScore) {
     return {
       score: null,
       riskLevel: null,
-      factors: ['Insufficient academic and attendance data'],
+      factors: ['Insufficient academic and attendance data to calculate risk'],
+      recommendation: 'Awaiting attendance and assessment records to generate risk profile.',
       hasData: false
     };
   }
@@ -222,18 +223,21 @@ function calculateExplainableRiskScore(attendancePercentage, assessmentScore) {
   const finalScore = Math.min(100, Math.max(0, Math.round(rawScore)));
 
   let riskLevel = 'low';
+  let recommendation = 'Maintain current learning trajectory; student is meeting academic and attendance benchmarks.';
+
   if (finalScore > 66) {
     riskLevel = 'high';
+    recommendation = 'Immediate intervention advised: schedule 1-on-1 academic counseling, address attendance barriers, and provide remedial study resources.';
   } else if (finalScore > 33) {
     riskLevel = 'medium';
-  } else {
-    riskLevel = 'low';
+    recommendation = 'Proactive monitoring recommended: track attendance trajectory closely and offer practice reviews before the next assessment.';
   }
 
   return {
     score: finalScore,
     riskLevel,
     factors,
+    recommendation,
     hasData: true
   };
 }

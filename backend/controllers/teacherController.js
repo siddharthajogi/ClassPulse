@@ -1759,5 +1759,431 @@ exports.recordStudentAttendanceAndMarks = async (req, res) => {
   }
 };
 
+/**
+ * @route   GET /api/teacher/risk-analytics
+ * @desc    Get detailed student risk analytics for teacher portal (adapted from EduRiskMonitor)
+ *          Calculated purely from real database records of the teacher's assigned classes/sections/subjects
+ * @access  Private (Teacher only)
+ */
+exports.getTeacherRiskAnalytics = async (req, res) => {
+  try {
+    const institutionId = req.currentUser.institution?._id || req.currentUser.institution;
+    const userId = req.currentUser._id;
+
+    // 1. Resolve TeacherProfile
+    const teacherProfile = await TeacherProfile.findOne({
+      user: userId,
+      institution: institutionId
+    });
+
+    if (!teacherProfile) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: Teacher profile not found.'
+      });
+    }
+
+    // 2. Fetch active TeachingAssignments for this teacher
+    const assignments = await TeachingAssignment.find({
+      teacher: teacherProfile._id,
+      institution: institutionId,
+      isActive: true
+    })
+      .populate('classRef', 'name course department academicYear semester section yearOfStudy isActive')
+      .populate('subject', 'name code department subjectType credits isActive');
+
+    // Maps and sets to track teacher's scope
+    const assignedClassIds = [];
+    const assignedClassMap = new Map();
+    const assignedSubjectMap = new Map();
+
+    assignments.forEach(a => {
+      if (a.classRef && a.classRef.isActive !== false) {
+        const cid = a.classRef._id.toString();
+        if (!assignedClassMap.has(cid)) {
+          assignedClassIds.push(a.classRef._id);
+          const normalizedYear = normalizeYearOfStudy(a.classRef.yearOfStudy, a.classRef.semester);
+          assignedClassMap.set(cid, {
+            ...a.classRef.toObject(),
+            yearOfStudy: a.classRef.yearOfStudy || normalizedYear
+          });
+        }
+      }
+      if (a.subject && a.subject.isActive !== false) {
+        const sid = a.subject._id.toString();
+        if (!assignedSubjectMap.has(sid)) {
+          assignedSubjectMap.set(sid, a.subject);
+        }
+      }
+    });
+
+    // 3. Build available filter options for this teacher
+    const yearsSet = new Set();
+    const deptsSet = new Set();
+    const sectionsList = [];
+    const subjectsList = Array.from(assignedSubjectMap.values()).map(s => ({
+      _id: s._id,
+      code: s.code,
+      name: s.name,
+      label: s.code ? `${s.code} — ${s.name}` : s.name
+    }));
+
+    assignedClassMap.forEach((c) => {
+      if (c.yearOfStudy) yearsSet.add(c.yearOfStudy);
+      if (c.department) deptsSet.add(c.department);
+      sectionsList.push({
+        _id: c._id,
+        yearOfStudy: c.yearOfStudy,
+        department: c.department,
+        section: c.section,
+        name: c.name
+      });
+    });
+
+    const filterOptions = {
+      years: Array.from(yearsSet),
+      departments: Array.from(deptsSet),
+      sections: sectionsList,
+      subjects: subjectsList
+    };
+
+    if (assignedClassIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        summary: {
+          totalStudents: 0,
+          highRiskCount: 0,
+          highRiskPercentage: 0,
+          mediumRiskCount: 0,
+          mediumRiskPercentage: 0,
+          lowRiskCount: 0,
+          lowRiskPercentage: 0,
+          insufficientDataCount: 0,
+          averageAttendance: null,
+          averagePerformance: null,
+          averageRiskScore: null
+        },
+        charts: {
+          riskDistribution: [],
+          attendanceDistribution: [],
+          performanceDistribution: []
+        },
+        students: [],
+        filterOptions
+      });
+    }
+
+    // 4. Filter target classes based on query: yearOfStudy, department, classId
+    const { yearOfStudy, department, classId, subjectId, riskLevel } = req.query;
+    let targetClassIds = assignedClassIds;
+
+    // Security check: if classId specified, verify authorization
+    if (classId && classId !== 'all') {
+      const matchCid = assignedClassIds.find(id => id.toString() === classId);
+      if (!matchCid) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized: You are not assigned to this section.'
+        });
+      }
+      targetClassIds = [matchCid];
+    } else {
+      if (yearOfStudy && yearOfStudy !== 'all') {
+        targetClassIds = targetClassIds.filter(cid => {
+          const c = assignedClassMap.get(cid.toString());
+          return c && (c.yearOfStudy === yearOfStudy || normalizeYearOfStudy(c.yearOfStudy, c.semester) === yearOfStudy);
+        });
+      }
+
+      if (department && department !== 'all') {
+        targetClassIds = targetClassIds.filter(cid => {
+          const c = assignedClassMap.get(cid.toString());
+          return c && c.department && c.department.toLowerCase() === department.toLowerCase();
+        });
+      }
+    }
+
+    // Security check: if subjectId specified, verify teacher teaches it
+    if (subjectId && subjectId !== 'all') {
+      if (!assignedSubjectMap.has(subjectId)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized: You are not assigned to this subject.'
+        });
+      }
+    }
+
+    if (targetClassIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        summary: {
+          totalStudents: 0,
+          highRiskCount: 0,
+          highRiskPercentage: 0,
+          mediumRiskCount: 0,
+          mediumRiskPercentage: 0,
+          lowRiskCount: 0,
+          lowRiskPercentage: 0,
+          insufficientDataCount: 0,
+          averageAttendance: null,
+          averagePerformance: null,
+          averageRiskScore: null
+        },
+        charts: {
+          riskDistribution: [],
+          attendanceDistribution: [],
+          performanceDistribution: []
+        },
+        students: [],
+        filterOptions
+      });
+    }
+
+    // 5. Query enrolled students in target classes
+    const studentDocs = await StudentProfile.find({
+      classRef: { $in: targetClassIds },
+      institution: institutionId
+    })
+      .populate('user', 'userId name email isActive')
+      .populate('departmentRef', 'name code')
+      .populate('classRef', 'name course department academicYear semester section yearOfStudy')
+      .sort({ studentId: 1, 'personalInfo.name': 1 });
+
+    const studentIds = studentDocs.map(s => s._id);
+
+    // 6. Query AcademicRecords & RiskPredictions
+    const recordQuery = {
+      student: { $in: studentIds },
+      institution: institutionId
+    };
+    if (subjectId && subjectId !== 'all') {
+      recordQuery.subject = subjectId;
+    }
+
+    const [academicRecords, riskPredictions] = await Promise.all([
+      AcademicRecord.find(recordQuery),
+      RiskPrediction.find({
+        student: { $in: studentIds },
+        institution: institutionId
+      })
+    ]);
+
+    const recordsByStudent = new Map();
+    academicRecords.forEach(r => {
+      const sid = r.student.toString();
+      if (!recordsByStudent.has(sid)) recordsByStudent.set(sid, []);
+      recordsByStudent.get(sid).push(r);
+    });
+
+    const predictionsByStudent = new Map();
+    riskPredictions.forEach(p => {
+      predictionsByStudent.set(p.student.toString(), p);
+    });
+
+    // 7. Enrich each student with calculated metrics and explainable risk
+    let totalAssessedAttendance = 0;
+    let studentsWithAttendance = 0;
+    let totalAssessedPerformance = 0;
+    let studentsWithPerformance = 0;
+    let totalRiskScores = 0;
+    let studentsWithRiskScores = 0;
+
+    let highRiskCount = 0;
+    let mediumRiskCount = 0;
+    let lowRiskCount = 0;
+    let insufficientDataCount = 0;
+
+    // Attendance brackets counters
+    let attGoodStanding = 0; // >= 75%
+    let attWarning = 0;      // 65% - 74%
+    let attCritical = 0;     // < 65%
+    let attNoData = 0;
+
+    // Performance brackets counters
+    let perfStrong = 0;      // >= 75%
+    let perfSatisfactory = 0;// 60% - 74%
+    let perfAtRisk = 0;      // 40% - 59%
+    let perfCritical = 0;    // < 40%
+    let perfNoData = 0;
+
+    const enrichedStudents = [];
+
+    studentDocs.forEach(s => {
+      const sid = s._id.toString();
+      const sRecords = recordsByStudent.get(sid) || [];
+      const sPrediction = predictionsByStudent.get(sid);
+
+      // Attendance percentage
+      const { attendancePercentage, classesAttended, totalClassesHeld, hasData: hasAttData } =
+        calculateAttendanceFromRecords(sRecords);
+
+      // Assessment score
+      const { assessmentScore, hasData: hasScoreData } =
+        calculateAssessmentFromRecords(sRecords);
+
+      // Explainable risk score and recommendation (EduRiskMonitor adapted)
+      const computedRisk = calculateExplainableRiskScore(attendancePercentage, assessmentScore);
+
+      let finalRiskScore = null;
+      let finalRiskLevel = null;
+      let finalRiskFactors = computedRisk.factors || [];
+      let finalRecommendation = computedRisk.recommendation || 'No action needed';
+
+      if (computedRisk.hasData) {
+        finalRiskScore = computedRisk.score;
+        finalRiskLevel = computedRisk.riskLevel;
+      } else if (sPrediction && typeof sPrediction.score === 'number') {
+        finalRiskScore = sPrediction.score;
+        finalRiskLevel = sPrediction.riskLevel || 'low';
+        if (sPrediction.factors && sPrediction.factors.length > 0) {
+          finalRiskFactors = sPrediction.factors;
+        }
+      }
+
+      // Tally metrics
+      if (hasAttData && attendancePercentage !== null) {
+        totalAssessedAttendance += attendancePercentage;
+        studentsWithAttendance++;
+
+        if (attendancePercentage >= 75) attGoodStanding++;
+        else if (attendancePercentage >= 65) attWarning++;
+        else attCritical++;
+      } else {
+        attNoData++;
+      }
+
+      if (hasScoreData && assessmentScore !== null) {
+        totalAssessedPerformance += assessmentScore;
+        studentsWithPerformance++;
+
+        if (assessmentScore >= 75) perfStrong++;
+        else if (assessmentScore >= 60) perfSatisfactory++;
+        else if (assessmentScore >= 40) perfAtRisk++;
+        else perfCritical++;
+      } else {
+        perfNoData++;
+      }
+
+      if (finalRiskLevel === 'high') {
+        highRiskCount++;
+        totalRiskScores += (finalRiskScore || 0);
+        studentsWithRiskScores++;
+      } else if (finalRiskLevel === 'medium') {
+        mediumRiskCount++;
+        totalRiskScores += (finalRiskScore || 0);
+        studentsWithRiskScores++;
+      } else if (finalRiskLevel === 'low') {
+        lowRiskCount++;
+        totalRiskScores += (finalRiskScore || 0);
+        studentsWithRiskScores++;
+      } else {
+        insufficientDataCount++;
+      }
+
+      const sClass = s.classRef || assignedClassMap.get(s.classRef?._id?.toString() || s.classRef?.toString());
+      const studentYear = s.yearOfStudy || sClass?.yearOfStudy || normalizeYearOfStudy(s.yearOfStudy, s.semester || sClass?.semester);
+
+      enrichedStudents.push({
+        _id: s._id,
+        studentId: s.studentId || s.user?.userId || '—',
+        name: s.user?.name || s.personalInfo?.name || '—',
+        email: s.personalInfo?.email || s.user?.email || '—',
+        department: s.department || sClass?.department || '—',
+        yearOfStudy: studentYear || '—',
+        section: s.section || sClass?.section || '—',
+        course: s.course || sClass?.course || 'B.Tech',
+        semester: s.semester || sClass?.semester || '—',
+        classRef: s.classRef ? (s.classRef._id || s.classRef) : null,
+        attendancePercentage,
+        classesAttended,
+        totalClassesHeld,
+        assessmentScore,
+        riskScore: finalRiskScore,
+        riskLevel: finalRiskLevel, // 'high' | 'medium' | 'low' | null
+        riskFactors: finalRiskFactors,
+        recommendation: finalRecommendation,
+        riskMethod: finalRiskScore !== null ? 'Rule-Based Explainable Algorithm (EduRiskMonitor adapted)' : 'Insufficient Data',
+        isActive: s.user?.isActive ?? true
+      });
+    });
+
+    // Filter enriched students if riskLevel filter applied
+    let filteredStudents = enrichedStudents;
+    if (riskLevel && riskLevel !== 'all') {
+      const targetLevel = riskLevel.toLowerCase().trim();
+      if (targetLevel === 'insufficient') {
+        filteredStudents = enrichedStudents.filter(s => s.riskLevel === null);
+      } else {
+        filteredStudents = enrichedStudents.filter(s => s.riskLevel === targetLevel);
+      }
+    }
+
+    const totalStudents = studentDocs.length;
+    const avgAttendance = studentsWithAttendance > 0
+      ? Math.round((totalAssessedAttendance / studentsWithAttendance) * 10) / 10
+      : null;
+    const avgPerformance = studentsWithPerformance > 0
+      ? Math.round((totalAssessedPerformance / studentsWithPerformance) * 10) / 10
+      : null;
+    const avgRiskScore = studentsWithRiskScores > 0
+      ? Math.round(totalRiskScores / studentsWithRiskScores)
+      : null;
+
+    // Charts payload (compatible with Recharts & EduRiskMonitor style)
+    const riskDistribution = [
+      { name: 'High Risk', count: highRiskCount, color: '#ef4444' },
+      { name: 'Medium Risk', count: mediumRiskCount, color: '#f59e0b' },
+      { name: 'Low Risk', count: lowRiskCount, color: '#10b981' },
+      { name: 'Insufficient Data', count: insufficientDataCount, color: '#94a3b8' }
+    ];
+
+    const attendanceDistribution = [
+      { name: 'Good (≥75%)', count: attGoodStanding, fill: '#10b981' },
+      { name: 'Warning (65-74%)', count: attWarning, fill: '#f59e0b' },
+      { name: 'Critical (<65%)', count: attCritical, fill: '#ef4444' },
+      { name: 'No Record', count: attNoData, fill: '#94a3b8' }
+    ];
+
+    const performanceDistribution = [
+      { name: 'Strong (≥75%)', count: perfStrong, fill: '#10b981' },
+      { name: 'Satisfactory (60-74%)', count: perfSatisfactory, fill: '#3b82f6' },
+      { name: 'At Risk (40-59%)', count: perfAtRisk, fill: '#f59e0b' },
+      { name: 'Critical (<40%)', count: perfCritical, fill: '#ef4444' },
+      { name: 'No Record', count: perfNoData, fill: '#94a3b8' }
+    ];
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalStudents,
+        highRiskCount,
+        highRiskPercentage: totalStudents > 0 ? Math.round((highRiskCount / totalStudents) * 100) : 0,
+        mediumRiskCount,
+        mediumRiskPercentage: totalStudents > 0 ? Math.round((mediumRiskCount / totalStudents) * 100) : 0,
+        lowRiskCount,
+        lowRiskPercentage: totalStudents > 0 ? Math.round((lowRiskCount / totalStudents) * 100) : 0,
+        insufficientDataCount,
+        insufficientDataPercentage: totalStudents > 0 ? Math.round((insufficientDataCount / totalStudents) * 100) : 0,
+        averageAttendance: avgAttendance,
+        averagePerformance: avgPerformance,
+        averageRiskScore: avgRiskScore
+      },
+      charts: {
+        riskDistribution,
+        attendanceDistribution,
+        performanceDistribution
+      },
+      students: filteredStudents,
+      filterOptions
+    });
+  } catch (error) {
+    console.error('getTeacherRiskAnalytics error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to generate student risk analytics.'
+    });
+  }
+};
+
 
 

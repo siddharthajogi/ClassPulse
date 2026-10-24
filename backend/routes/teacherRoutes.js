@@ -21,6 +21,12 @@ router.get('/dashboard/analytics', teacherController.getDashboardAnalytics);
 router.get('/dashboard/stats', teacherController.getDashboardAnalytics);
 
 /**
+ * @route   GET /api/teacher/risk-analytics
+ * @desc    Detailed student risk analytics (EduRiskMonitor adapted) with filters, charts, and risk directory
+ */
+router.get('/risk-analytics', teacherController.getTeacherRiskAnalytics);
+
+/**
  * @route   GET /api/teacher/subjects
  * @desc    Get all unique subjects assigned to the authenticated teacher with associated sections
  */

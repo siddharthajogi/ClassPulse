@@ -283,6 +283,10 @@ export const teacherApi = {
     const response = await api.get('/teacher/dashboard/stats');
     return response.data;
   },
+  getTeacherRiskAnalytics: async (params = {}) => {
+    const response = await api.get('/teacher/risk-analytics', { params });
+    return response.data;
+  },
   getMySubjects: async () => {
     const response = await api.get('/teacher/subjects');
     return response.data;
