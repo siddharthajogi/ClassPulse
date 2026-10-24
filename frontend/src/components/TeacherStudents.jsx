@@ -13,15 +13,12 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  ShieldAlert,
-  ShieldCheck,
   UserCheck,
-  ChevronRight,
   BookOpen,
-  CheckCircle2,
-  Edit3,
   Activity,
-  Calculator
+  GraduationCap,
+  CalendarCheck,
+  FileText
 } from 'lucide-react';
 
 // Academic years of study in canonical order matching ClassPulse curriculum
@@ -61,22 +58,12 @@ export default function TeacherStudents({ currentUser }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // View Profile / Attendance Update Modal State
+  // View Profile Modal State (Read-Only)
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [studentDetails, setStudentDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Attendance & Assessment Form State inside modal
-  const [formSubjectId, setFormSubjectId] = useState('');
-  const [formClassesAttended, setFormClassesAttended] = useState('');
-  const [formTotalClassesHeld, setFormTotalClassesHeld] = useState('');
-  const [formMarksObtained, setFormMarksObtained] = useState('');
-  const [formTotalMarks, setFormTotalMarks] = useState('');
-  const [savingRecord, setSavingRecord] = useState(false);
-  const [recordSaveError, setRecordSaveError] = useState('');
-  const [recordSaveSuccess, setRecordSaveSuccess] = useState('');
 
   // 1. Load teacher's assigned classes on mount
   const loadTeacherClasses = useCallback(async (isManual = false) => {
@@ -170,7 +157,18 @@ export default function TeacherStudents({ currentUser }) {
     return list;
   }, [classes, yearFilter, departments]);
 
-  // Dependent Options: Section dropdown options based on Year & Department filters
+  // Format short, readable section name (e.g. "Section A", "Section B", "Section C")
+  const formatShortSectionName = (sec) => {
+    if (!sec) return 'Section';
+    const trimmed = String(sec).trim();
+    if (/^section\s+/i.test(trimmed)) return trimmed;
+    if (/^sec\.?\s+/i.test(trimmed)) {
+      return `Section ${trimmed.replace(/^sec\.?\s+/i, '')}`;
+    }
+    return `Section ${trimmed}`;
+  };
+
+  // Dependent Options: Section dropdown options with short, readable names ("Section A", "Section B", "Section C")
   const sectionDropdownOptions = useMemo(() => {
     const list = [{ value: 'all', label: 'All Sections' }];
 
@@ -182,10 +180,31 @@ export default function TeacherStudents({ currentUser }) {
       filtered = filtered.filter(c => c.department?.toLowerCase() === departmentFilter.toLowerCase());
     }
 
-    filtered.forEach(c => {
+    // Sort sections alphabetically by section letter/name
+    const sorted = [...filtered].sort((a, b) => {
+      const secA = (a.section || '').replace(/^sec(tion)?\s*/i, '');
+      const secB = (b.section || '').replace(/^sec(tion)?\s*/i, '');
+      return secA.localeCompare(secB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    // Check for collisions across multiple departments if All Departments is active
+    const labelCounts = {};
+    sorted.forEach(c => {
+      const short = formatShortSectionName(c.section);
+      labelCounts[short] = (labelCounts[short] || 0) + 1;
+    });
+
+    sorted.forEach(c => {
+      const baseShort = formatShortSectionName(c.section);
+      // When a specific department is chosen, always display cleanly "Section A", "Section B"
+      // If "All Departments" has duplicate section names across departments, append dept code for clarity
+      const label = (labelCounts[baseShort] > 1 && departmentFilter === 'all')
+        ? `${baseShort} (${c.department})`
+        : baseShort;
+
       list.push({
         value: c._id,
-        label: `${c.course || 'B.Tech'} ${c.department} - Sec ${c.section} (${c.yearOfStudy || ''})`
+        label
       });
     });
 
@@ -196,23 +215,23 @@ export default function TeacherStudents({ currentUser }) {
   const handleYearChange = (newYear) => {
     setYearFilter(newYear);
 
-    // Check if current departmentFilter remains valid for new year
+    // Compute remaining classes for new year
     const classesForNewYear = newYear === 'all'
       ? classes
       : classes.filter(c => c.yearOfStudy === newYear);
 
-    const validDepts = new Set(classesForNewYear.map(c => c.department));
+    const validDepts = new Set(classesForNewYear.map(c => c.department?.toLowerCase()));
     let nextDept = departmentFilter;
-    if (departmentFilter !== 'all' && !validDepts.has(departmentFilter)) {
+    if (departmentFilter !== 'all' && !validDepts.has(departmentFilter.toLowerCase())) {
       nextDept = 'all';
       setDepartmentFilter('all');
     }
 
-    // Check if current sectionFilter remains valid
+    // Reset section filter if current section is not in new classes
     if (sectionFilter !== 'all') {
       const isSecValid = classesForNewYear.some(c =>
         c._id.toString() === sectionFilter &&
-        (nextDept === 'all' || c.department === nextDept)
+        (nextDept === 'all' || c.department?.toLowerCase() === nextDept.toLowerCase())
       );
       if (!isSecValid) {
         setSectionFilter('all');
@@ -228,7 +247,7 @@ export default function TeacherStudents({ currentUser }) {
       const isSecValid = classes.some(c =>
         c._id.toString() === sectionFilter &&
         (yearFilter === 'all' || c.yearOfStudy === yearFilter) &&
-        (newDept === 'all' || c.department === newDept)
+        (newDept === 'all' || c.department?.toLowerCase() === newDept.toLowerCase())
       );
       if (!isSecValid) {
         setSectionFilter('all');
@@ -303,29 +322,17 @@ export default function TeacherStudents({ currentUser }) {
     }
   };
 
-  // Open View Profile / Attendance Recording Modal
+  // Open View Profile Modal (Read-Only)
   const handleOpenProfileModal = async (studentId) => {
     setSelectedStudentId(studentId);
     setIsModalOpen(true);
     setLoadingDetails(true);
     setDetailsError('');
-    setRecordSaveError('');
-    setRecordSaveSuccess('');
-
-    // Reset form fields
-    setFormSubjectId('');
-    setFormClassesAttended('');
-    setFormTotalClassesHeld('');
-    setFormMarksObtained('');
-    setFormTotalMarks('');
 
     try {
       const res = await teacherApi.getStudentDetails(studentId);
       if (res && res.success && res.student) {
         setStudentDetails(res.student);
-        if (res.student.teacherSubjects && res.student.teacherSubjects.length > 0) {
-          setFormSubjectId(res.student.teacherSubjects[0]._id);
-        }
       } else {
         setDetailsError(res?.error || 'Failed to fetch student details.');
       }
@@ -341,74 +348,13 @@ export default function TeacherStudents({ currentUser }) {
     setIsModalOpen(false);
     setSelectedStudentId(null);
     setStudentDetails(null);
-    setRecordSaveError('');
-    setRecordSaveSuccess('');
+    setDetailsError('');
   };
-
-  // Submit attendance and assessment update
-  const handleSaveAttendanceAndRecord = async (e) => {
-    e.preventDefault();
-    if (!formSubjectId) {
-      setRecordSaveError('Please select a subject.');
-      return;
-    }
-
-    setSavingRecord(true);
-    setRecordSaveError('');
-    setRecordSaveSuccess('');
-
-    try {
-      const payload = {
-        subjectId: formSubjectId
-      };
-
-      if (formTotalClassesHeld !== '') {
-        payload.totalClassesHeld = Number(formTotalClassesHeld);
-        payload.classesAttended = Number(formClassesAttended || 0);
-      }
-
-      if (formTotalMarks !== '') {
-        payload.totalMarks = Number(formTotalMarks);
-        payload.marksObtained = Number(formMarksObtained || 0);
-      }
-
-      const res = await teacherApi.recordStudentAttendance(selectedStudentId, payload);
-      if (res && res.success) {
-        setRecordSaveSuccess('Attendance and assessment records saved. Metrics recalculated successfully.');
-
-        // Refresh details in modal
-        const updatedDetails = await teacherApi.getStudentDetails(selectedStudentId);
-        if (updatedDetails && updatedDetails.success) {
-          setStudentDetails(updatedDetails.student);
-        }
-
-        // Refresh master student directory list immediately
-        fetchStudents();
-      } else {
-        setRecordSaveError(res?.error || 'Failed to save record.');
-      }
-    } catch (err) {
-      console.error('Failed to save attendance record:', err);
-      setRecordSaveError(err.response?.data?.error || err.message || 'Error saving attendance record.');
-    } finally {
-      setSavingRecord(false);
-    }
-  };
-
-  // Live preview calculation for the modal formula: (Attended / Held) * 100
-  const liveAttendancePreview = useMemo(() => {
-    const held = Number(formTotalClassesHeld);
-    const attended = Number(formClassesAttended || 0);
-    if (!isNaN(held) && !isNaN(attended) && held > 0 && attended >= 0 && attended <= held) {
-      return Math.min(100, Math.max(0, Math.round((attended / held) * 100 * 10) / 10));
-    }
-    return null;
-  }, [formClassesAttended, formTotalClassesHeld]);
 
   // Initial Loading Skeleton
   if (loadingInitial) {
     return (
-      <div className="space-y-6 max-w-7xl mx-auto pb-12" data-testid="teacher-students-loading">
+      <div className="space-y-4 max-w-7xl mx-auto pb-12 pt-1" data-testid="teacher-students-loading">
         <div className="flex flex-col sm:flex-row gap-3">
           {[1, 2, 3].map(n => (
             <div key={n} className="flex-1 bg-white dark:bg-slate-900 rounded-2xl h-12 border border-slate-200 dark:border-slate-800 animate-pulse" />
@@ -422,7 +368,7 @@ export default function TeacherStudents({ currentUser }) {
   // Error state for classes
   if (pageError && classes.length === 0) {
     return (
-      <div className="max-w-xl mx-auto my-12 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 p-8 rounded-2xl shadow-sm text-center">
+      <div className="max-w-xl mx-auto my-8 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 p-8 rounded-2xl shadow-sm text-center">
         <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/80 rounded-2xl flex items-center justify-center mx-auto mb-4 text-rose-600 dark:text-rose-400">
           <AlertCircle className="w-7 h-7" />
         </div>
@@ -444,17 +390,14 @@ export default function TeacherStudents({ currentUser }) {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 transition-colors duration-200" data-testid="teacher-students-page">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 max-w-7xl mx-auto pb-16 transition-colors duration-200" data-testid="teacher-students-page">
+      {/* 2. Sub-Header: Duplicate 'Students' heading removed, content shifted upward */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-0.5">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 mb-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
             <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>Assigned Students Directory</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
-            Students
-          </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             Directory of enrolled students across your assigned sections with attendance records and academic risk scores.
           </p>
@@ -467,15 +410,15 @@ export default function TeacherStudents({ currentUser }) {
             loadTeacherClasses(true);
           }}
           disabled={refreshing || loadingStudents}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl text-xs sm:text-sm font-medium transition-all shadow-xs self-start sm:self-auto cursor-pointer disabled:opacity-60"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl text-xs sm:text-sm font-medium transition-all shadow-xs self-start sm:self-auto cursor-pointer disabled:opacity-60 shrink-0"
         >
           <RefreshCw className={`w-4 h-4 ${refreshing || loadingStudents ? 'animate-spin text-emerald-600' : ''}`} />
           <span>Refresh Records</span>
         </button>
       </div>
 
-      {/* 1. Three Dependent Filters & Search Bar */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 space-y-3.5">
+      {/* 3. Three Dependent Filters & Search Bar */}
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-4.5 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 space-y-3">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
           {/* Search Box */}
           <div className="relative flex-1 w-full">
@@ -506,7 +449,7 @@ export default function TeacherStudents({ currentUser }) {
             )}
           </div>
 
-          {/* Three Dependent Dropdowns */}
+          {/* Three Dependent Dropdowns: All Years -> All Departments -> All Sections */}
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Filter 1: All Years */}
             <TeacherDropdown
@@ -518,8 +461,8 @@ export default function TeacherStudents({ currentUser }) {
               placeholder="All Years"
               title="Filter by Year"
               icon={Calendar}
-              className="w-full sm:w-auto min-w-[155px]"
-              menuClassName="w-full sm:w-[200px]"
+              className="w-full sm:w-auto min-w-[150px]"
+              menuClassName="w-full sm:w-[190px]"
             />
 
             {/* Filter 2: All Departments */}
@@ -532,11 +475,11 @@ export default function TeacherStudents({ currentUser }) {
               placeholder="All Departments"
               title="Filter by Department"
               icon={Building2}
-              className="w-full sm:w-auto min-w-[190px]"
-              menuClassName="w-full sm:w-[280px]"
+              className="w-full sm:w-auto min-w-[185px]"
+              menuClassName="w-full sm:w-[270px]"
             />
 
-            {/* Filter 3: All Sections */}
+            {/* Filter 3: All Sections (Short names: Section A, Section B, Section C) */}
             <TeacherDropdown
               id="teacher-students-section-filter"
               data-testid="teacher-students-section-filter"
@@ -546,8 +489,8 @@ export default function TeacherStudents({ currentUser }) {
               placeholder="All Sections"
               title="Filter by Section"
               icon={Layers}
-              className="w-full sm:w-auto min-w-[180px]"
-              menuClassName="w-full sm:w-[290px]"
+              className="w-full sm:w-auto min-w-[165px]"
+              menuClassName="w-full sm:w-[220px]"
             />
           </div>
         </div>
@@ -555,7 +498,7 @@ export default function TeacherStudents({ currentUser }) {
         {/* Active Filter Chips & Clear */}
         {(yearFilter !== 'all' || departmentFilter !== 'all' || sectionFilter !== 'all' || searchTerm) && (
           <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs flex-wrap">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Active criteria:</span>
+            <span className="text-slate-500 dark:text-slate-400 font-medium">Active filters:</span>
             {yearFilter !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold">
                 <span>Year: {yearFilter}</span>
@@ -596,7 +539,7 @@ export default function TeacherStudents({ currentUser }) {
         )}
       </div>
 
-      {/* 2. Student Directory Table */}
+      {/* 4. Student Directory Table */}
       {loadingStudents ? (
         <div className="py-20 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
           <RefreshCw className="w-8 h-8 animate-spin mx-auto text-emerald-600 dark:text-emerald-400" />
@@ -649,7 +592,7 @@ export default function TeacherStudents({ currentUser }) {
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {/* Table Header Summary & Rows-per-page */}
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
             <span>
@@ -866,7 +809,7 @@ export default function TeacherStudents({ currentUser }) {
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-slate-700 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-emerald-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-300 transition-colors cursor-pointer"
                           data-testid={`view-profile-btn-${student.studentId}`}
                         >
-                          <UserCheck className="w-3.5 h-3.5" />
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                           <span>View Profile</span>
                         </button>
                       </td>
@@ -908,11 +851,11 @@ export default function TeacherStudents({ currentUser }) {
         </div>
       )}
 
-      {/* 3. View Profile & End-to-End Attendance/Assessment Update Modal */}
+      {/* 5. View Profile Modal: Read-only student profile, records, and risk analysis with green close styling */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
+            {/* Modal Header with Green Close Control */}
             <div className="px-6 py-4.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600 dark:text-emerald-400">
@@ -920,7 +863,7 @@ export default function TeacherStudents({ currentUser }) {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                    Student Profile & Records
+                    Student Profile
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {studentDetails ? `${studentDetails.name} (${studentDetails.studentId})` : 'Loading profile...'}
@@ -928,16 +871,19 @@ export default function TeacherStudents({ currentUser }) {
                 </div>
               </div>
 
+              {/* Close Icon Styled with Teacher Portal Green Theme */}
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors cursor-pointer"
+                title="Close modal"
+                data-testid="modal-header-close-btn"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
+            {/* Modal Body: Read-Only Overview & Summaries */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1">
               {loadingDetails ? (
                 <div className="py-16 text-center space-y-2">
@@ -949,12 +895,12 @@ export default function TeacherStudents({ currentUser }) {
                   {detailsError}
                 </div>
               ) : studentDetails ? (
-                <div className="space-y-6">
-                  {/* Student Details Card */}
+                <div className="space-y-5">
+                  {/* Student Demographic Information Card */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 text-xs">
                     <div>
                       <span className="text-slate-400 font-medium">Department</span>
-                      <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{studentDetails.department}</p>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{studentDetails.department || '—'}</p>
                     </div>
                     <div>
                       <span className="text-slate-400 font-medium">Year & Section</span>
@@ -962,181 +908,202 @@ export default function TeacherStudents({ currentUser }) {
                     </div>
                     <div>
                       <span className="text-slate-400 font-medium">Course</span>
-                      <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{studentDetails.course}</p>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{studentDetails.course || 'B.Tech'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-medium">Semester</span>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{studentDetails.semester || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-medium">Academic Year</span>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{studentDetails.academicYear || '—'}</p>
                     </div>
                     <div>
                       <span className="text-slate-400 font-medium">Email</span>
                       <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5 truncate">{studentDetails.email || '—'}</p>
                     </div>
-                    <div>
-                      <span className="text-slate-400 font-medium">Attendance %</span>
-                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        {typeof studentDetails.attendancePercentage === 'number' ? `${studentDetails.attendancePercentage}%` : '—'}
+                  </div>
+
+                  {/* Attendance & Performance Summary Metrics Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Attendance Metric Card */}
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 shadow-2xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          Attendance Summary
+                        </span>
+                        <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                          <CalendarCheck className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                          {typeof studentDetails.attendancePercentage === 'number' ? `${studentDetails.attendancePercentage}%` : '—'}
+                        </span>
+                        {typeof studentDetails.classesAttended === 'number' && typeof studentDetails.totalClassesHeld === 'number' && studentDetails.totalClassesHeld > 0 && (
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            ({studentDetails.classesAttended} / {studentDetails.totalClassesHeld} classes)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                        {typeof studentDetails.attendancePercentage === 'number'
+                          ? studentDetails.attendancePercentage >= 75
+                            ? 'Good Standing (above 75% minimum requirement)'
+                            : 'Attendance Warning (below 75% institutional requirement)'
+                          : 'No attendance records recorded yet'}
                       </p>
                     </div>
-                    <div>
-                      <span className="text-slate-400 font-medium">Risk Score</span>
-                      <p className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                        {typeof studentDetails.riskScore === 'number' ? `${studentDetails.riskScore} (${studentDetails.riskLevel})` : 'Insufficient data'}
+
+                    {/* Academic Risk Metric Card */}
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 shadow-2xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          Academic Risk
+                        </span>
+                        <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        {typeof studentDetails.riskScore === 'number' ? (
+                          <>
+                            <span className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
+                              {studentDetails.riskScore}
+                            </span>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-md font-semibold border ${
+                                studentDetails.riskLevel === 'high'
+                                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900/60'
+                                  : studentDetails.riskLevel === 'medium'
+                                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900/60'
+                                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60'
+                              }`}
+                            >
+                              {studentDetails.riskLevel ? studentDetails.riskLevel.toUpperCase() + ' RISK' : 'LOW RISK'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                            Insufficient data
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                        {typeof studentDetails.assessmentScore === 'number'
+                          ? `Assessment Average: ${studentDetails.assessmentScore}%`
+                          : 'Calculated from saved attendance and assessment trends'}
                       </p>
                     </div>
                   </div>
 
                   {/* Explainable Risk Factors */}
-                  {studentDetails.riskFactors && studentDetails.riskFactors.length > 0 && (
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 mb-1.5">
-                        <Activity className="w-3.5 h-3.5" />
-                        <span>Explainable Risk Analysis</span>
-                      </div>
-                      <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                  <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                      <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Explainable Risk Analysis Factors</span>
+                    </div>
+                    {studentDetails.riskFactors && studentDetails.riskFactors.length > 0 ? (
+                      <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside">
                         {studentDetails.riskFactors.map((factor, idx) => (
-                          <li key={idx}>{factor}</li>
+                          <li key={idx} className="leading-relaxed">{factor}</li>
                         ))}
                       </ul>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                        Insufficient data to calculate risk factors. Academic records will populate this analysis.
+                      </p>
+                    )}
+                  </div>
 
-                  {/* End-to-End Attendance & Assessment Entry Form */}
-                  <form onSubmit={handleSaveAttendanceAndRecord} className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                  {/* Saved Academic & Attendance Records Table (Read-Only) */}
+                  <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calculator className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                          Update Attendance & Assessment Records
-                        </h4>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Saved Academic & Attendance Records</span>
                       </div>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                        Formula: (Attended ÷ Held) × 100
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                        {studentDetails.records?.length || 0} record{studentDetails.records?.length === 1 ? '' : 's'} found
                       </span>
                     </div>
 
-                    {recordSaveSuccess && (
-                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                        <span>{recordSaveSuccess}</span>
+                    {studentDetails.records && studentDetails.records.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <table className="w-full text-left text-xs whitespace-nowrap">
+                          <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-semibold">
+                            <tr>
+                              <th className="px-3.5 py-2.5">Subject</th>
+                              <th className="px-3.5 py-2.5">Attendance</th>
+                              <th className="px-3.5 py-2.5">Assessment Marks</th>
+                              <th className="px-3.5 py-2.5">Academic Year</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            {studentDetails.records.map((rec) => (
+                              <tr key={rec._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td className="px-3.5 py-2.5 font-medium text-slate-800 dark:text-slate-200">
+                                  {rec.subject?.code ? `${rec.subject.code} — ` : ''}{rec.subject?.name || 'Subject'}
+                                </td>
+                                <td className="px-3.5 py-2.5">
+                                  {typeof rec.attendancePercentage === 'number' ? (
+                                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                      {rec.attendancePercentage}%
+                                      {typeof rec.classesAttended === 'number' && typeof rec.totalClassesHeld === 'number' && rec.totalClassesHeld > 0 && (
+                                        <span className="font-normal text-slate-400 ml-1">
+                                          ({rec.classesAttended}/{rec.totalClassesHeld})
+                                        </span>
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3.5 py-2.5">
+                                  {typeof rec.marksObtained === 'number' && typeof rec.totalMarks === 'number' ? (
+                                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                      {rec.marksObtained} / {rec.totalMarks}
+                                      <span className="font-normal text-slate-400 ml-1">
+                                        ({Math.round((rec.marksObtained / rec.totalMarks) * 100)}%)
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3.5 py-2.5 text-slate-500 dark:text-slate-400">
+                                  {rec.academicYear?.year || '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                        No saved attendance or assessment records found for this student. Records are entered on the Attendance and Academic Records pages.
                       </div>
                     )}
+                  </div>
 
-                    {recordSaveError && (
-                      <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                        <span>{recordSaveError}</span>
-                      </div>
-                    )}
-
-                    {/* Subject Selector */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                        Assigned Subject
-                      </label>
-                      <select
-                        value={formSubjectId}
-                        onChange={(e) => setFormSubjectId(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                        required
-                      >
-                        {studentDetails.teacherSubjects && studentDetails.teacherSubjects.length > 0 ? (
-                          studentDetails.teacherSubjects.map(subj => (
-                            <option key={subj._id} value={subj._id}>
-                              {subj.code ? `${subj.code} — ` : ''}{subj.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="">No subject assigned to this section</option>
-                        )}
-                      </select>
-                    </div>
-
-                    {/* Attendance Entry (Classes Attended & Total Classes Held) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Classes Attended
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formClassesAttended}
-                          onChange={(e) => setFormClassesAttended(e.target.value)}
-                          placeholder="e.g. 34"
-                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Total Classes Held
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={formTotalClassesHeld}
-                          onChange={(e) => setFormTotalClassesHeld(e.target.value)}
-                          placeholder="e.g. 40"
-                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Live Preview of Calculated Attendance Percentage */}
-                    {liveAttendancePreview !== null && (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-                        <span>Live Calculated Attendance:</span>
-                        <span className="font-extrabold text-sm">{liveAttendancePreview}%</span>
-                      </div>
-                    )}
-
-                    {/* Assessment Marks Entry (Optional) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Marks Obtained
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formMarksObtained}
-                          onChange={(e) => setFormMarksObtained(e.target.value)}
-                          placeholder="e.g. 82"
-                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Total Marks
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={formTotalMarks}
-                          onChange={(e) => setFormTotalMarks(e.target.value)}
-                          placeholder="e.g. 100"
-                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={savingRecord || !formSubjectId}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-xs cursor-pointer disabled:opacity-60"
-                      >
-                        {savingRecord && <RefreshCw className="w-4 h-4 animate-spin" />}
-                        <span>Save & Recalculate Attendance & Risk</span>
-                      </button>
-                    </div>
-                  </form>
+                  {/* Informational Guidance Notice */}
+                  <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-xs text-slate-600 dark:text-slate-400">
+                    <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <span>
+                      Attendance records are entered and managed on the <span className="font-semibold text-slate-800 dark:text-slate-200">Attendance</span> page. Assessment marks are entered and managed on the <span className="font-semibold text-slate-800 dark:text-slate-200">Academic Records</span> page.
+                    </span>
+                  </div>
                 </div>
               ) : null}
             </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+            {/* Modal Footer with Green Theme Close Button */}
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-end">
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-xs hover:shadow transition-all duration-150 cursor-pointer"
+                data-testid="modal-footer-close-btn"
               >
                 Close
               </button>
