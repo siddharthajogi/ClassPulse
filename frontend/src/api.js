@@ -278,6 +278,22 @@ export const teacherApi = {
   getSectionStudents: async (id) => {
     const response = await api.get(`/teacher/classes/${id}`);
     return response.data;
+  },
+  getProfile: async () => {
+    const response = await api.get('/teacher/profile');
+    return response.data;
+  },
+  getTeacherProfile: async () => {
+    const response = await api.get('/teacher/profile');
+    return response.data;
+  },
+  updateProfile: async (profileData) => {
+    const response = await api.put('/teacher/profile', profileData);
+    return response.data;
+  },
+  updateTeacherProfile: async (profileData) => {
+    const response = await api.put('/teacher/profile', profileData);
+    return response.data;
   }
 };
 

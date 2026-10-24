@@ -9,6 +9,7 @@ const Subject = require('../models/Subject');
 const Class = require('../models/Class');
 const Department = require('../models/Department');
 const Institution = require('../models/Institution');
+const User = require('../models/User');
 
 /**
  * @route   GET /api/teacher/dashboard/analytics
@@ -879,6 +880,381 @@ exports.getClassDetails = async (req, res) => {
       success: false,
       error: 'Failed to fetch section details.'
     });
+  }
+};
+
+/**
+ * @route   GET /api/teacher/profile
+ * @desc    Get authenticated teacher's profile details and available departments
+ * @access  Private (Teacher only)
+ */
+exports.getTeacherProfile = async (req, res) => {
+  try {
+    const userId = req.currentUser._id;
+    const institutionId = req.currentUser.institution?._id || req.currentUser.institution;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Teacher account not found' });
+    }
+
+    let teacherProfile = await TeacherProfile.findOne({
+      user: userId,
+      institution: institutionId
+    }).populate('departmentRef', 'name code');
+
+    if (!teacherProfile && user.userId) {
+      teacherProfile = await TeacherProfile.findOne({
+        teacherId: user.userId,
+        institution: institutionId
+      }).populate('departmentRef', 'name code');
+    }
+
+    // Retrieve institution departments
+    let departments = [];
+    try {
+      if (institutionId) {
+        const { ensureDepartmentsForInstitution } = require('./adminController');
+        departments = await ensureDepartmentsForInstitution(institutionId);
+      }
+    } catch (_) {}
+
+    if (!departments || departments.length === 0) {
+      departments = await Department.find({ institution: institutionId, isActive: true }).sort({ name: 1 });
+    }
+
+    const { QUALIFICATION_OPTIONS } = require('../config/qualifications');
+
+    const qual = teacherProfile?.professionalInfo?.highestQualification ||
+      user.highestQualification ||
+      (Array.isArray(teacherProfile?.professionalInfo?.qualifications) && teacherProfile.professionalInfo.qualifications[0]) ||
+      (Array.isArray(user.qualifications) && user.qualifications[0]) || '';
+
+    const qualificationsList = (Array.isArray(teacherProfile?.professionalInfo?.qualifications) && teacherProfile.professionalInfo.qualifications.length > 0)
+      ? teacherProfile.professionalInfo.qualifications
+      : (Array.isArray(user.qualifications) ? user.qualifications : []);
+
+    const profileData = {
+      _id: teacherProfile?._id || user._id,
+      userId: user.userId,
+      teacherId: teacherProfile?.teacherId || user.userId,
+      name: user.name || teacherProfile?.personalInfo?.name || '',
+      email: user.email || teacherProfile?.personalInfo?.email || '',
+      phone: user.phone || teacherProfile?.personalInfo?.phone || '',
+      address: teacherProfile?.personalInfo?.address || '',
+      designation: teacherProfile?.designation || user.designation || 'Faculty',
+      highestQualification: qual,
+      qualifications: qualificationsList,
+      department: teacherProfile?.department || user.department || '',
+      departmentRef: teacherProfile?.departmentRef || null,
+      specialization: teacherProfile?.professionalInfo?.specialization || user.specialization || '',
+      yearsOfExperience: teacherProfile?.professionalInfo?.yearsOfExperience ?? 0,
+      profilePhoto: user.profilePhoto || '',
+      role: user.role || 'teacher',
+      isActive: user.isActive !== false,
+      createdAt: teacherProfile?.createdAt || user.createdAt,
+      updatedAt: teacherProfile?.updatedAt || user.updatedAt
+    };
+
+    return res.status(200).json({
+      success: true,
+      profile: profileData,
+      departments: departments.map(d => ({
+        _id: d._id,
+        name: d.name,
+        code: d.code,
+        isActive: d.isActive !== false
+      })),
+      qualifications: QUALIFICATION_OPTIONS,
+      qualificationsOptions: QUALIFICATION_OPTIONS
+    });
+  } catch (error) {
+    console.error('getTeacherProfile error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve teacher profile' });
+  }
+};
+
+/**
+ * @route   PUT /api/teacher/profile
+ * @desc    Update authenticated teacher's profile
+ * @access  Private (Teacher only)
+ */
+exports.updateTeacherProfile = async (req, res) => {
+  try {
+    const userId = req.currentUser._id;
+    const institutionId = req.currentUser.institution?._id || req.currentUser.institution;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Teacher account not found' });
+    }
+
+    let teacherProfile = await TeacherProfile.findOne({
+      user: userId,
+      institution: institutionId
+    });
+
+    if (!teacherProfile && user.userId) {
+      teacherProfile = await TeacherProfile.findOne({
+        teacherId: user.userId,
+        institution: institutionId
+      });
+    }
+
+    const {
+      name,
+      email,
+      phone,
+      address,
+      designation,
+      highestQualification,
+      customQualification,
+      otherQualification,
+      qualifications,
+      department,
+      specialization,
+      yearsOfExperience,
+      profilePhoto
+    } = req.body;
+
+    const errors = {};
+
+    // 1. Validate Full Name (required, min 2 chars)
+    if (name === undefined || typeof name !== 'string' || !name.trim()) {
+      errors.name = 'Full Name is required';
+    } else if (name.trim().length < 2) {
+      errors.name = 'Full Name must be at least 2 characters long';
+    }
+
+    // 2. Validate Email (required, valid format)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    let cleanEmail = '';
+    if (email === undefined || typeof email !== 'string' || !email.trim()) {
+      errors.email = 'Official Email Address is required';
+    } else {
+      cleanEmail = email.trim().toLowerCase();
+      if (!emailRegex.test(cleanEmail)) {
+        errors.email = 'Please provide a valid email address';
+      }
+    }
+
+    // 3. Check duplicate email if changed
+    if (!errors.email && cleanEmail && cleanEmail !== user.email) {
+      const existingUser = await User.findOne({ email: cleanEmail, _id: { $ne: user._id } });
+      if (existingUser) {
+        errors.email = 'Email address is already in use by another account';
+      }
+      if (!errors.email && teacherProfile) {
+        const existingTeacherEmail = await TeacherProfile.findOne({
+          'personalInfo.email': cleanEmail,
+          _id: { $ne: teacherProfile._id }
+        });
+        if (existingTeacherEmail) {
+          errors.email = 'Email address is already in use by another account';
+        }
+      }
+    }
+
+    // 4. Validate Phone if provided
+    let cleanPhone = user.phone || teacherProfile?.personalInfo?.phone || '';
+    if (phone !== undefined) {
+      const phoneStr = String(phone).trim();
+      if (phoneStr) {
+        const phoneDigits = phoneStr.replace(/\D/g, '');
+        if (phoneDigits.length !== 10) {
+          errors.phone = 'Please provide a valid 10-digit contact number';
+        } else {
+          cleanPhone = phoneDigits;
+        }
+      } else {
+        cleanPhone = '';
+      }
+    }
+
+    // 5. Validate profile photo size if provided (max 3MB)
+    let cleanPhoto = user.profilePhoto || '';
+    if (profilePhoto !== undefined) {
+      if (typeof profilePhoto === 'string') {
+        if (profilePhoto.startsWith('data:image/')) {
+          const approxBytes = profilePhoto.length * 0.75;
+          if (approxBytes > 3 * 1024 * 1024) {
+            errors.profilePhoto = 'Profile photo file size must not exceed 3MB';
+          } else {
+            cleanPhoto = profilePhoto;
+          }
+        } else {
+          cleanPhoto = profilePhoto.trim();
+        }
+      } else if (profilePhoto === null || profilePhoto === '') {
+        cleanPhoto = '';
+      }
+    }
+
+    // 6. Validate Department if provided
+    let targetDeptDoc = null;
+    let cleanDeptName = teacherProfile?.department || user.department || '';
+    if (department !== undefined && typeof department === 'string' && department.trim()) {
+      cleanDeptName = department.trim();
+      targetDeptDoc = await Department.findOne({
+        institution: institutionId,
+        $or: [
+          { name: cleanDeptName },
+          { _id: mongoose.Types.ObjectId.isValid(cleanDeptName) ? cleanDeptName : null }
+        ]
+      });
+      if (targetDeptDoc) {
+        cleanDeptName = targetDeptDoc.name;
+      }
+    }
+
+    // 7. Validate Qualifications
+    let finalQual = highestQualification;
+    const custom = typeof customQualification === 'string' ? customQualification.trim() : (typeof otherQualification === 'string' ? otherQualification.trim() : '');
+    if ((finalQual === 'Other' || !finalQual) && custom) {
+      finalQual = custom;
+    }
+
+    let normalizedQuals = [];
+    if (Array.isArray(qualifications) && qualifications.length > 0) {
+      normalizedQuals = qualifications.map(q => (typeof q === 'string' ? q.trim() : '')).filter(Boolean);
+    } else if (finalQual && typeof finalQual === 'string' && finalQual.trim()) {
+      normalizedQuals = [finalQual.trim()];
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: Object.values(errors)[0],
+        errors
+      });
+    }
+
+    // Whitelist and apply updates to User model (Protected fields: userId, role, isActive, password strictly untouched)
+    user.name = name.trim();
+    user.email = cleanEmail;
+    user.phone = cleanPhone;
+    if (designation !== undefined) {
+      user.designation = typeof designation === 'string' ? designation.trim() : '';
+    }
+    if (cleanDeptName) {
+      user.department = cleanDeptName;
+    }
+    if (specialization !== undefined) {
+      user.specialization = typeof specialization === 'string' ? specialization.trim() : '';
+    }
+    if (highestQualification !== undefined || customQualification !== undefined || otherQualification !== undefined || qualifications !== undefined) {
+      user.qualifications = normalizedQuals;
+      user.highestQualification = (typeof finalQual === 'string' && finalQual.trim()) ? finalQual.trim() : (normalizedQuals[0] || '');
+    }
+    if (profilePhoto !== undefined) {
+      user.profilePhoto = cleanPhoto;
+    }
+
+    await user.save();
+
+    // Whitelist and apply updates to TeacherProfile model if present
+    if (teacherProfile) {
+      teacherProfile.department = cleanDeptName || teacherProfile.department;
+      if (targetDeptDoc) {
+        teacherProfile.departmentRef = targetDeptDoc._id;
+      }
+      if (designation !== undefined) {
+        teacherProfile.designation = typeof designation === 'string' ? designation.trim() : teacherProfile.designation;
+      }
+      if (!teacherProfile.personalInfo) teacherProfile.personalInfo = {};
+      teacherProfile.personalInfo.name = name.trim();
+      teacherProfile.personalInfo.email = cleanEmail;
+      teacherProfile.personalInfo.phone = cleanPhone;
+      if (address !== undefined) {
+        teacherProfile.personalInfo.address = typeof address === 'string' ? address.trim() : '';
+      }
+
+      if (!teacherProfile.professionalInfo) teacherProfile.professionalInfo = {};
+      if (highestQualification !== undefined || customQualification !== undefined || otherQualification !== undefined || qualifications !== undefined) {
+        teacherProfile.professionalInfo.qualifications = normalizedQuals;
+        teacherProfile.professionalInfo.highestQualification = (typeof finalQual === 'string' && finalQual.trim()) ? finalQual.trim() : (normalizedQuals[0] || '');
+      }
+      if (specialization !== undefined) {
+        teacherProfile.professionalInfo.specialization = typeof specialization === 'string' ? specialization.trim() : '';
+      }
+      if (yearsOfExperience !== undefined) {
+        const numExp = Number(yearsOfExperience);
+        teacherProfile.professionalInfo.yearsOfExperience = !isNaN(numExp) && numExp >= 0 ? numExp : 0;
+      }
+
+      await teacherProfile.save();
+    } else {
+      // Create TeacherProfile if missing
+      teacherProfile = new TeacherProfile({
+        institution: institutionId,
+        user: user._id,
+        teacherId: user.userId,
+        department: cleanDeptName || 'General Faculty',
+        departmentRef: targetDeptDoc ? targetDeptDoc._id : undefined,
+        designation: typeof designation === 'string' && designation.trim() ? designation.trim() : (user.designation || 'Faculty'),
+        personalInfo: {
+          name: name.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
+          address: typeof address === 'string' ? address.trim() : ''
+        },
+        professionalInfo: {
+          qualifications: normalizedQuals,
+          highestQualification: (typeof finalQual === 'string' && finalQual.trim()) ? finalQual.trim() : (normalizedQuals[0] || ''),
+          specialization: typeof specialization === 'string' ? specialization.trim() : '',
+          yearsOfExperience: typeof yearsOfExperience !== 'undefined' ? Number(yearsOfExperience) || 0 : 0
+        }
+      });
+      await teacherProfile.save();
+    }
+
+    // Sync session user
+    if (req.session && req.session.user) {
+      req.session.user.name = user.name;
+    }
+
+    // Log audit entry
+    try {
+      const AuditLog = require('../models/AuditLog');
+      if (user.institution) {
+        await AuditLog.create({
+          institution: user.institution,
+          action: 'TEACHER_PROFILE_UPDATE',
+          actor: user._id,
+          targetType: 'TeacherProfile',
+          targetId: teacherProfile._id,
+          details: { name: user.name, email: user.email, designation: user.designation, department: user.department }
+        });
+      }
+    } catch (_) {}
+
+    return res.status(200).json({
+      success: true,
+      message: 'Teacher profile updated successfully',
+      profile: {
+        _id: teacherProfile._id,
+        userId: user.userId,
+        teacherId: teacherProfile.teacherId || user.userId,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: teacherProfile.personalInfo?.address || '',
+        designation: teacherProfile.designation || user.designation || 'Faculty',
+        highestQualification: teacherProfile.professionalInfo?.highestQualification || user.highestQualification || '',
+        qualifications: teacherProfile.professionalInfo?.qualifications || user.qualifications || [],
+        department: teacherProfile.department || user.department || '',
+        specialization: teacherProfile.professionalInfo?.specialization || user.specialization || '',
+        yearsOfExperience: teacherProfile.professionalInfo?.yearsOfExperience ?? 0,
+        profilePhoto: user.profilePhoto || '',
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: teacherProfile.createdAt || user.createdAt,
+        updatedAt: teacherProfile.updatedAt || user.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('updateTeacherProfile error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update teacher profile' });
   }
 };
 

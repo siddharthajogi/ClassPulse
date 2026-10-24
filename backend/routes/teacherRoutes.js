@@ -44,6 +44,18 @@ router.get('/classes/:id', teacherController.getClassDetails);
  */
 router.get('/students/sections/:id', teacherController.getClassDetails);
 
+/**
+ * @route   GET /api/teacher/profile
+ * @desc    Get authenticated teacher's profile details and available departments
+ */
+router.get('/profile', teacherController.getTeacherProfile);
+
+/**
+ * @route   PUT /api/teacher/profile
+ * @desc    Update authenticated teacher's profile
+ */
+router.put('/profile', teacherController.updateTeacherProfile);
+
 module.exports = router;
 
 
