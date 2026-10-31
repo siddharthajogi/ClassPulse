@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import { 
   User, 
   Mail, 
@@ -8,9 +7,7 @@ import {
   Briefcase, 
   GraduationCap, 
   Building2, 
-  Award, 
   ShieldCheck, 
-  Calendar, 
   Edit3, 
   Save, 
   X, 
@@ -20,13 +17,15 @@ import {
   CheckCircle2, 
   Loader2, 
   Lock,
-  KeyRound,
-  ExternalLink,
-  Upload
+  Upload,
+  Clock
 } from 'lucide-react';
-import { adminApi, authApi } from '../api';
+import { adminApi } from '../api';
 import { usePageRefresh } from '../context/RefreshContext';
-import { QUALIFICATION_OPTIONS, STANDARD_QUALIFICATIONS } from '../config/qualifications';
+import { 
+  ADMIN_QUALIFICATION_OPTIONS, 
+  STANDARD_ADMIN_QUALIFICATIONS 
+} from '../config/qualifications';
 
 // Helper to generate initials from full name or user ID
 const getInitials = (name, fallbackId = 'AD') => {
@@ -37,19 +36,62 @@ const getInitials = (name, fallbackId = 'AD') => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-// Format ISO date to friendly string
-const formatDate = (isoString) => {
-  if (!isoString) return 'Not available';
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  } catch (_) {
-    return isoString;
+// Helper to parse and normalize qualifications from various backward-compatible formats
+const parseQualifications = (p) => {
+  let rawList = [];
+  if (Array.isArray(p?.qualifications) && p.qualifications.length > 0) {
+    rawList = p.qualifications;
+  } else if (p?.highestQualification && typeof p.highestQualification === 'string') {
+    if (p.highestQualification.includes(',')) {
+      rawList = p.highestQualification.split(',').map(s => s.trim()).filter(Boolean);
+    } else {
+      rawList = [p.highestQualification.trim()];
+    }
   }
+
+  const migrated = [];
+  const custom = [];
+
+  rawList.forEach(item => {
+    if (!item || typeof item !== 'string') return;
+    const trimmed = item.trim();
+    if (!trimmed) return;
+
+    if (trimmed === 'B.Tech / B.E.') {
+      migrated.push('B.Tech', 'B.E.');
+    } else if (trimmed === 'M.Tech / M.E.') {
+      migrated.push('M.Tech', 'M.E.');
+    } else if (STANDARD_ADMIN_QUALIFICATIONS.includes(trimmed)) {
+      migrated.push(trimmed);
+    } else if (trimmed === 'Other') {
+      // Handled via hasOther
+    } else {
+      custom.push(trimmed);
+    }
+  });
+
+  const uniqueSelected = Array.from(new Set(migrated));
+  return {
+    selectedQualifications: uniqueSelected,
+    customQualificationText: custom.join(', '),
+    hasOther: custom.length > 0 || rawList.includes('Other')
+  };
+};
+
+// Helper to format qualifications for comma-separated display
+const getDisplayQualifications = (p) => {
+  if (!p) return 'Not specified';
+  const { selectedQualifications, customQualificationText } = parseQualifications(p);
+  const items = [...selectedQualifications];
+  if (customQualificationText) {
+    customQualificationText.split(',').map(s => s.trim()).filter(Boolean).forEach(c => {
+      if (!items.includes(c)) items.push(c);
+    });
+  }
+  if (items.length > 0) {
+    return items.join(', ');
+  }
+  return p.highestQualification || 'Not specified';
 };
 
 export default function AdminProfile() {
@@ -70,10 +112,10 @@ export default function AdminProfile() {
     email: '',
     phone: '',
     designation: '',
-    highestQualification: '',
+    qualifications: [],
     customQualification: '',
     department: '',
-    specialization: '',
+    yearsOfExperience: '',
     profilePhoto: ''
   });
 
@@ -113,7 +155,7 @@ export default function AdminProfile() {
     try {
       const [profileRes, deptRes] = await Promise.all([
         adminApi.getAdminProfile(),
-        adminApi.getDepartments()
+        adminApi.getDepartments().catch(() => ({ success: false, departments: [] }))
       ]);
 
       if (profileRes && profileRes.success && profileRes.profile) {
@@ -124,11 +166,27 @@ export default function AdminProfile() {
         setError(profileRes?.error || 'Failed to load administrator profile');
       }
 
-      if (deptRes && deptRes.success) {
-        setDepartments(deptRes.departments || []);
+      // Merge departments from profile endpoint and departments endpoint
+      const allDepts = [];
+      if (profileRes?.departments && Array.isArray(profileRes.departments)) {
+        profileRes.departments.forEach(d => {
+          const name = typeof d === 'string' ? d : d.name;
+          if (name && !allDepts.some(item => (typeof item === 'string' ? item : item.name) === name)) {
+            allDepts.push(d);
+          }
+        });
       }
+      if (deptRes?.departments && Array.isArray(deptRes.departments)) {
+        deptRes.departments.forEach(d => {
+          const name = typeof d === 'string' ? d : d.name;
+          if (name && !allDepts.some(item => (typeof item === 'string' ? item : item.name) === name)) {
+            allDepts.push(d);
+          }
+        });
+      }
+      setDepartments(allDepts);
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      console.error('Failed to load admin profile:', err);
       setError(err?.response?.data?.error || err.message || 'Error connecting to server');
     } finally {
       setLoading(false);
@@ -143,23 +201,21 @@ export default function AdminProfile() {
 
   // Populate form data from profile model
   const populateFormData = (p) => {
-    const qual = p.highestQualification || (Array.isArray(p.qualifications) && p.qualifications[0]) || '';
-    const isStandard = STANDARD_QUALIFICATIONS.includes(qual);
-    const isOther = !isStandard && Boolean(qual) && qual !== 'Other';
+    const { selectedQualifications, customQualificationText, hasOther } = parseQualifications(p);
 
     setFormData({
       name: p.name || '',
       email: p.email || '',
       phone: p.phone || '',
       designation: p.designation || '',
-      highestQualification: isStandard ? qual : (qual ? 'Other' : ''),
-      customQualification: isOther ? qual : '',
+      qualifications: selectedQualifications,
+      customQualification: customQualificationText,
       department: p.department || '',
-      specialization: p.specialization || '',
+      yearsOfExperience: p.yearsOfExperience !== undefined && p.yearsOfExperience !== null ? String(p.yearsOfExperience) : '',
       profilePhoto: p.profilePhoto || ''
     });
 
-    setIsOtherQualification(isOther || qual === 'Other');
+    setIsOtherQualification(hasOther);
     setFormErrors({});
   };
 
@@ -195,28 +251,38 @@ export default function AdminProfile() {
     }
   };
 
-  // Handle Qualification Dropdown Change
-  const handleQualificationChange = (e) => {
-    const val = e.target.value;
-    if (val === 'Other') {
-      setIsOtherQualification(true);
-      setFormData(prev => ({
-        ...prev,
-        highestQualification: 'Other',
-        customQualification: prev.customQualification || ''
-      }));
-    } else {
-      setIsOtherQualification(false);
-      setFormData(prev => ({
-        ...prev,
-        highestQualification: val,
-        customQualification: ''
-      }));
+  // Handle Qualification Checkbox Toggle
+  const handleToggleQualification = (opt) => {
+    if (opt === 'Other') {
+      setIsOtherQualification(prev => {
+        const nextVal = !prev;
+        if (!nextVal) {
+          setFormData(f => ({ ...f, customQualification: '' }));
+        }
+        return nextVal;
+      });
+      if (formErrors.qualifications) {
+        setFormErrors(prev => {
+          const copy = { ...prev };
+          delete copy.qualifications;
+          return copy;
+        });
+      }
+      return;
     }
-    if (formErrors.highestQualification) {
+
+    setFormData(prev => {
+      const current = prev.qualifications || [];
+      const updated = current.includes(opt)
+        ? current.filter(item => item !== opt)
+        : [...current, opt];
+      return { ...prev, qualifications: updated };
+    });
+
+    if (formErrors.qualifications) {
       setFormErrors(prev => {
         const copy = { ...prev };
-        delete copy.highestQualification;
+        delete copy.qualifications;
         return copy;
       });
     }
@@ -302,10 +368,10 @@ export default function AdminProfile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate type
+    // Validate type (PNG, JPG, JPEG, WebP)
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      setFormErrors(prev => ({ ...prev, profilePhoto: 'Please upload a valid image file (JPEG, PNG, WebP, or GIF)' }));
+      setFormErrors(prev => ({ ...prev, profilePhoto: 'Please upload a valid image file (PNG, JPG, JPEG, or WebP)' }));
       return;
     }
 
@@ -379,8 +445,19 @@ export default function AdminProfile() {
       }
     }
 
-    if (isOtherQualification && !formData.customQualification.trim()) {
-      errors.highestQualification = 'Please specify your qualification';
+    const hasStandard = (formData.qualifications || []).length > 0;
+    const hasCustom = isOtherQualification && Boolean(formData.customQualification?.trim());
+    if (isOtherQualification && !formData.customQualification?.trim()) {
+      errors.qualifications = 'Please specify your other qualification';
+    } else if (!hasStandard && !hasCustom) {
+      errors.qualifications = 'Please select at least one educational qualification';
+    }
+
+    if (formData.yearsOfExperience !== '' && formData.yearsOfExperience !== undefined) {
+      const num = Number(formData.yearsOfExperience);
+      if (isNaN(num) || num < 0 || num > 70) {
+        errors.yearsOfExperience = 'Please enter a valid non-negative number of years (0 - 70)';
+      }
     }
 
     setFormErrors(errors);
@@ -400,10 +477,14 @@ export default function AdminProfile() {
     setSaving(true);
 
     try {
-      // Determine final qualification string
-      let finalQualification = formData.highestQualification;
-      if (isOtherQualification) {
-        finalQualification = formData.customQualification.trim() || 'Other';
+      const finalQualifications = [...(formData.qualifications || []).filter(q => q !== 'Other')];
+      if (isOtherQualification && formData.customQualification?.trim()) {
+        const customItems = formData.customQualification.split(',').map(s => s.trim()).filter(Boolean);
+        customItems.forEach(item => {
+          if (!finalQualifications.includes(item)) {
+            finalQualifications.push(item);
+          }
+        });
       }
 
       const payload = {
@@ -411,10 +492,10 @@ export default function AdminProfile() {
         email: formData.email.trim().toLowerCase(),
         phone: formData.phone.trim(),
         designation: formData.designation.trim(),
-        highestQualification: finalQualification,
-        qualifications: finalQualification ? [finalQualification] : [],
+        highestQualification: finalQualifications.join(', '),
+        qualifications: finalQualifications,
         department: formData.department.trim(),
-        specialization: formData.specialization.trim(),
+        yearsOfExperience: formData.yearsOfExperience !== '' ? Number(formData.yearsOfExperience) : 0,
         profilePhoto: formData.profilePhoto
       };
 
@@ -427,13 +508,13 @@ export default function AdminProfile() {
         setSuccessMessage('Administrator profile updated successfully.');
         setTimeout(() => setSuccessMessage(''), 4000);
       } else {
-        setError(res?.error || 'Failed to update profile');
+        setError(res?.error || 'Failed to update administrator profile');
         if (res?.errors) {
           setFormErrors(res.errors);
         }
       }
     } catch (err) {
-      console.error('Update profile error:', err);
+      console.error('Update administrator profile error:', err);
       const serverMsg = err?.response?.data?.error || err.message || 'Server error while saving profile';
       setError(serverMsg);
       if (err?.response?.data?.errors) {
@@ -459,17 +540,20 @@ export default function AdminProfile() {
         <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Profile Not Found</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-          Unable to retrieve the authenticated administrator profile from the database.
+          Unable to retrieve your authenticated administrator profile from the database.
         </p>
         <button
           onClick={loadProfileData}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
         >
           Try Again
         </button>
       </div>
     );
   }
+
+  const currentPhoto = isEditing ? formData.profilePhoto : (profile?.profilePhoto || formData.profilePhoto);
+  const hasPhoto = Boolean(currentPhoto);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 transition-colors duration-200">
@@ -490,7 +574,7 @@ export default function AdminProfile() {
           </div>
           <button
             onClick={() => setError('')}
-            className="text-rose-600 hover:text-rose-800 dark:text-rose-400 text-xs font-semibold"
+            className="text-rose-600 hover:text-rose-800 dark:text-rose-400 text-xs font-semibold cursor-pointer"
           >
             Dismiss
           </button>
@@ -498,144 +582,138 @@ export default function AdminProfile() {
       )}
 
       {/* 1. Profile Overview Header Card */}
-      {(() => {
-        const currentPhoto = isEditing ? formData.profilePhoto : (profile?.profilePhoto || formData.profilePhoto);
-        const hasPhoto = Boolean(currentPhoto);
-        return (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-5 text-center sm:text-left min-w-0">
-                {/* Avatar & Photo Upload Controls */}
-                <div className="relative shrink-0">
-                  {currentPhoto ? (
-                    <img
-                      src={currentPhoto}
-                      alt={(isEditing ? formData.name : profile.name) || 'Administrator'}
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-xs border-2 border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white font-bold text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 border-indigo-200/50 dark:border-indigo-800/50">
-                      {getInitials(isEditing ? (formData.name || profile.name) : profile.name, profile.userId)}
-                    </div>
-                  )}
-
-                  {/* Only Two Controls: Upload Image & Delete Image */}
-                  <div className="absolute -bottom-2 -right-2 flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCameraError('');
-                        setIsUploadModalOpen(true);
-                      }}
-                      className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 transition-colors cursor-pointer"
-                      title="Upload Image"
-                      aria-label="Upload Image"
-                    >
-                      <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </button>
-
-                    {hasPhoto && (
-                      <button
-                        type="button"
-                        onClick={() => setIsDeleteModalOpen(true)}
-                        className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/70 dark:hover:bg-rose-900/80 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer"
-                        title="Delete Image"
-                        aria-label="Delete Image"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                    )}
-                  </div>
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-5 text-center sm:text-left min-w-0">
+            {/* Avatar & Photo Upload Controls */}
+            <div className="relative shrink-0">
+              {currentPhoto ? (
+                <img
+                  src={currentPhoto}
+                  alt={(isEditing ? formData.name : profile.name) || 'Administrator'}
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-xs border-2 border-indigo-200 dark:border-indigo-800 bg-slate-100 dark:bg-slate-800"
+                />
+              ) : (
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white font-bold text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 border-indigo-200/50 dark:border-indigo-800/50">
+                  {getInitials(isEditing ? (formData.name || profile.name) : profile.name, profile.userId)}
                 </div>
+              )}
 
-                {/* Profile Header Details: Name, Designation, Badges */}
-                <div className="space-y-1 min-w-0">
-                  <h1 
-                    className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight truncate max-w-xs sm:max-w-md lg:max-w-lg"
-                    title={(isEditing ? formData.name : profile.name) || 'Administrator'}
-                  >
-                    {(isEditing ? formData.name : profile.name) || 'Administrator'}
-                  </h1>
+              {/* Upload Image & Delete Image Controls */}
+              <div className="absolute -bottom-2 -right-2 flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCameraError('');
+                    setIsUploadModalOpen(true);
+                  }}
+                  className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 transition-colors cursor-pointer"
+                  title="Upload Image"
+                  aria-label="Upload Image"
+                >
+                  <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
 
-                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                    {(isEditing ? formData.designation : profile.designation) || 'Administrator'}
-                    {(isEditing ? formData.department : profile.department) 
-                      ? ` • ${getDepartmentName(isEditing ? formData.department : profile.department)}` 
-                      : ''}
-                  </p>
-
-                  {/* Status and Role Badges */}
-                  <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60">
-                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                      <span>Administrator</span>
-                    </span>
-
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>{profile.isActive ? 'Active' : 'Inactive'}</span>
-                    </span>
-
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                      <Hash className="w-3 h-3 text-slate-400" />
-                      <span>ID: {profile.userId}</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons: Cancel and Save Changes on desktop aligned right */}
-              <div className="flex items-center justify-center sm:justify-end gap-2.5 shrink-0 w-full md:w-auto">
-                {isEditing ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleCancelEdit}
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
-                    >
-                      <X className="w-4 h-4" />
-                      <span>Cancel</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSaveChanges}
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Saving Changes...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4" />
-                          <span>Save Changes</span>
-                        </>
-                      )}
-                    </button>
-                  </>
-                ) : (
+                {hasPhoto && (
                   <button
                     type="button"
-                    onClick={handleStartEdit}
-                    className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+                    onClick={() => setIsDeleteModalOpen(true)}
+                    className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/70 dark:hover:bg-rose-900/80 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer"
+                    title="Delete Image"
+                    aria-label="Delete Image"
                   >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Edit Profile</span>
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                 )}
               </div>
             </div>
 
-            {formErrors.profilePhoto && (
-              <p className="text-xs text-rose-500 mt-3 font-medium text-center sm:text-left">{formErrors.profilePhoto}</p>
+            {/* Profile Header Details: Name, Designation, Department, Badges */}
+            <div className="space-y-1 min-w-0">
+              <h1 
+                className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight truncate max-w-xs sm:max-w-md lg:max-w-lg"
+                title={(isEditing ? formData.name : profile.name) || 'Administrator'}
+              >
+                {(isEditing ? formData.name : profile.name) || 'Administrator'}
+              </h1>
+
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                {(isEditing ? formData.designation : profile.designation) || 'Administrator'}
+                {(isEditing ? formData.department : profile.department) 
+                  ? ` • ${getDepartmentName(isEditing ? formData.department : profile.department)}` 
+                  : ''}
+              </p>
+
+              {/* Status, Role, and ID Badges */}
+              <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Administrator</span>
+                </span>
+
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{profile.isActive ? 'Active' : 'Inactive'}</span>
+                </span>
+
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  <Hash className="w-3 h-3 text-slate-400" />
+                  <span>ID: {profile.userId}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons: Edit / Cancel / Save */}
+          <div className="flex items-center justify-center sm:justify-end gap-2.5 shrink-0 w-full md:w-auto">
+            {isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Cancel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveChanges}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartEdit}
+                className="inline-flex items-center gap-2 px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>Edit Profile</span>
+              </button>
             )}
           </div>
-        );
-      })()}
+        </div>
+
+        {formErrors.profilePhoto && (
+          <p className="text-xs text-rose-500 mt-3 font-medium text-center sm:text-left">{formErrors.profilePhoto}</p>
+        )}
+      </div>
 
       {/* Upload Image Modal */}
       {isUploadModalOpen && (
@@ -804,7 +882,7 @@ export default function AdminProfile() {
             </div>
 
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              Are you sure you want to remove your current profile photo? This will not delete your account or any other profile details.
+              Are you sure you want to remove your current profile photo? This will not delete your account or any other administrator details.
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -827,12 +905,12 @@ export default function AdminProfile() {
         </div>
       )}
 
-      {/* Profile Content Grid */}
+      {/* Profile Content Grid: Two Balanced Columns (Personal Info & Professional Info) */}
       <form onSubmit={handleSaveChanges} className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7">
 
         {/* 2. Personal Information Card */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
-          <div className="flex items-center gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3 pb-4 mb-1 border-b border-slate-100 dark:border-slate-800">
             <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
               <User className="w-5 h-5" />
             </div>
@@ -842,7 +920,7 @@ export default function AdminProfile() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4.5 sm:space-y-5">
             {/* Full Name */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -957,18 +1035,18 @@ export default function AdminProfile() {
         </div>
 
         {/* 3. Professional Information Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
-          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+          <div className="flex items-center gap-3 pb-4 mb-1 border-b border-slate-100 dark:border-slate-800">
             <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
               <Briefcase className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Professional Information</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Academic credentials and institutional role</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Academic credentials and administrative role</p>
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4.5 sm:space-y-5">
             {/* Designation */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -980,7 +1058,7 @@ export default function AdminProfile() {
                     type="text"
                     value={formData.designation}
                     onChange={(e) => handleInputChange('designation', e.target.value)}
-                    placeholder="e.g. Principal, System Administrator, Dean"
+                    placeholder="e.g. Principal, Director, System Administrator"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
                   />
                 </div>
@@ -992,50 +1070,70 @@ export default function AdminProfile() {
               )}
             </div>
 
-            {/* Highest Educational Qualification */}
+            {/* Highest Educational Qualification (Multiple Selection) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Highest Educational Qualification
+                Highest Educational Qualification {isEditing && <span className="text-rose-500">*</span>}
               </label>
               {isEditing ? (
-                <div className="space-y-2">
-                  <select
-                    value={formData.highestQualification}
-                    onChange={handleQualificationChange}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-                  >
-                    <option value="">Select Qualification...</option>
-                    {QUALIFICATION_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {ADMIN_QUALIFICATION_OPTIONS.map((opt) => {
+                      const isSelected = opt === 'Other'
+                        ? isOtherQualification
+                        : (formData.qualifications || []).includes(opt);
+
+                      return (
+                        <label
+                          key={opt}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-pointer transition-all select-none ${
+                            isSelected
+                              ? 'bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-500 dark:border-indigo-500 text-indigo-900 dark:text-indigo-100 shadow-2xs font-semibold'
+                              : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleQualification(opt)}
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-700 cursor-pointer accent-indigo-600 shrink-0"
+                          />
+                          <span className="truncate">{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
 
                   {/* Custom Qualification input when "Other" is chosen */}
                   {isOtherQualification && (
-                    <div>
+                    <div className="space-y-1 pt-1">
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Specify Other Qualification <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={formData.customQualification}
                         onChange={(e) => handleInputChange('customQualification', e.target.value)}
-                        placeholder="Enter your custom qualification"
+                        placeholder="e.g. Post-Doctorate, M.Phil., PG Diploma"
                         className={`w-full px-3.5 py-2 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
-                          formErrors.highestQualification
+                          formErrors.qualifications
                             ? 'border-rose-400 dark:border-rose-500'
                             : 'border-slate-200 dark:border-slate-700'
                         }`}
                       />
-                      {formErrors.highestQualification && (
-                        <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.highestQualification}</p>
-                      )}
                     </div>
+                  )}
+
+                  {formErrors.qualifications && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.qualifications}</p>
                   )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
                   <GraduationCap className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>{profile.highestQualification || 'Not specified'}</span>
+                  <span className="break-words">
+                    {getDisplayQualifications(profile)}
+                  </span>
                 </div>
               )}
             </div>
@@ -1072,124 +1170,43 @@ export default function AdminProfile() {
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
                   <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>
-                    {(() => {
-                      if (!profile.department) return 'General Administration';
-                      const matched = departments.find(d =>
-                        (d._id && String(d._id) === String(profile.department)) ||
-                        (d.code && d.code.toLowerCase() === String(profile.department).toLowerCase()) ||
-                        (d.name && d.name.toLowerCase() === String(profile.department).toLowerCase())
-                      );
-                      return matched ? matched.name : profile.department;
-                    })()}
-                  </span>
+                  <span>{getDepartmentName(profile.department)}</span>
                 </div>
               )}
             </div>
 
-            {/* Specialization */}
+            {/* Experience (Years) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Specialization
+                Experience (Years)
               </label>
               {isEditing ? (
                 <div>
                   <input
-                    type="text"
-                    value={formData.specialization}
-                    onChange={(e) => handleInputChange('specialization', e.target.value)}
-                    placeholder="e.g. Higher Education Management, AI, Systems"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                    type="number"
+                    min="0"
+                    max="70"
+                    step="any"
+                    value={formData.yearsOfExperience}
+                    onChange={(e) => handleInputChange('yearsOfExperience', e.target.value)}
+                    placeholder="e.g. 8 or 4.5"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+                      formErrors.yearsOfExperience 
+                        ? 'border-rose-400 dark:border-rose-500 bg-rose-50/20' 
+                        : 'border-slate-200 dark:border-slate-700'
+                    }`}
                   />
+                  {formErrors.yearsOfExperience && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.yearsOfExperience}</p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
-                  <Award className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>{profile.specialization || 'Not specified'}</span>
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>{profile.yearsOfExperience !== undefined && profile.yearsOfExperience !== null ? `${profile.yearsOfExperience} Years` : '0 Years'}</span>
                 </div>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* 4. Account Information Card (Full Width on 2-col or Bottom) */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
-          <div className="flex items-center justify-between pb-4 mb-1 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Account & Security Information</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Immutable system credentials and security status</p>
-              </div>
-            </div>
-
-            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-              <Lock className="w-3.5 h-3.5" />
-              <span>Protected System Fields</span>
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-            {/* Admin ID */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Admin ID
-              </p>
-              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                {profile.userId}
-              </p>
-              <p className="text-[10px] text-slate-400">Unique account key</p>
-            </div>
-
-            {/* Assigned Role */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Account Role
-              </p>
-              <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 capitalize">
-                {profile.role || 'Administrator'}
-              </p>
-              <p className="text-[10px] text-slate-400">Highest portal privileges</p>
-            </div>
-
-            {/* Account Status */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Account Status
-              </p>
-              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                {profile.isActive ? 'Active' : 'Disabled'}
-              </p>
-              <p className="text-[10px] text-slate-400">Authentication enabled</p>
-            </div>
-
-            {/* Account Created Date */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Account Created Date
-              </p>
-              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                {formatDate(profile.createdAt)}
-              </p>
-              <p className="text-[10px] text-slate-400">Member since inception</p>
-            </div>
-          </div>
-
-          {/* Security Notice */}
-          <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/80">
-            <div className="flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>Password and authorization secrets are strictly protected and never stored in plain text.</span>
-            </div>
-            <Link
-              to="/admin/settings"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-indigo-600 dark:text-indigo-400 transition-colors w-fit"
-            >
-              <span>Change Password in Settings</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Link>
           </div>
         </div>
 

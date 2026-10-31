@@ -36,3 +36,21 @@ export const TEACHER_QUALIFICATION_OPTIONS = [
 
 export const STANDARD_TEACHER_QUALIFICATIONS = TEACHER_QUALIFICATION_OPTIONS.filter((q) => q !== 'Other');
 
+export const ADMIN_QUALIFICATION_OPTIONS = [
+  'Diploma',
+  'B.Tech',
+  'B.E.',
+  'B.Sc.',
+  'BCA',
+  'M.Tech',
+  'M.E.',
+  'M.Sc.',
+  'MCA',
+  'MBA',
+  'Ph.D.',
+  'Other'
+];
+
+export const STANDARD_ADMIN_QUALIFICATIONS = ADMIN_QUALIFICATION_OPTIONS.filter((q) => q !== 'Other');
+
+

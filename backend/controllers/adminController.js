@@ -15,7 +15,7 @@ const Notification = require('../models/Notification');
 const Department = require('../models/Department');
 const { createNotification, notifyAllAdmins, syncSystemAndAcademicAlerts } = require('../services/notificationService');
 const DEPARTMENTS = require('../config/departments');
-const { QUALIFICATION_OPTIONS } = require('../config/qualifications');
+const { QUALIFICATION_OPTIONS, ADMIN_QUALIFICATION_OPTIONS } = require('../config/qualifications');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -350,12 +350,26 @@ exports.getAdminProfile = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Administrator profile not found' });
     }
 
-    // Retrieve database departments
+    // Retrieve database departments from Department collection and classes
     let dbDepts = [];
     try {
       const institutionId = user.institution?._id || user.institution;
+      const deptDocs = await Department.find({
+        $or: [
+          { institution: institutionId },
+          { institution: { $exists: false } },
+          { institution: null }
+        ]
+      }).sort({ name: 1 });
+      dbDepts = deptDocs.map(d => d.name);
+
       if (institutionId) {
-        dbDepts = await Class.distinct('department', { institution: institutionId });
+        const classDepts = await Class.distinct('department', { institution: institutionId });
+        classDepts.forEach(cd => {
+          if (cd && !dbDepts.includes(cd.trim())) {
+            dbDepts.push(cd.trim());
+          }
+        });
       }
     } catch (_) {}
 
@@ -378,7 +392,7 @@ exports.getAdminProfile = async (req, res) => {
         highestQualification: user.highestQualification || '',
         qualifications: Array.isArray(user.qualifications) ? user.qualifications : [],
         department: user.department || '',
-        specialization: user.specialization || '',
+        yearsOfExperience: user.yearsOfExperience ?? 0,
         profilePhoto: user.profilePhoto || '',
         role: user.role,
         isActive: user.isActive,
@@ -386,8 +400,9 @@ exports.getAdminProfile = async (req, res) => {
         updatedAt: user.updatedAt
       },
       departments: departmentsList,
-      qualifications: QUALIFICATION_OPTIONS,
-      qualificationsOptions: QUALIFICATION_OPTIONS
+      qualifications: ADMIN_QUALIFICATION_OPTIONS,
+      qualificationsOptions: ADMIN_QUALIFICATION_OPTIONS,
+      adminQualifications: ADMIN_QUALIFICATION_OPTIONS
     });
   } catch (error) {
     console.error('getAdminProfile error:', error);
@@ -414,7 +429,7 @@ exports.updateAdminProfile = async (req, res) => {
       otherQualification,
       qualifications,
       department,
-      specialization,
+      yearsOfExperience,
       profilePhoto
     } = req.body;
 
@@ -482,6 +497,51 @@ exports.updateAdminProfile = async (req, res) => {
       }
     }
 
+    // 6. Validate Experience (Years) - Accepts non-negative integer and decimal values
+    let cleanExperience = user.yearsOfExperience ?? 0;
+    if (yearsOfExperience !== undefined && yearsOfExperience !== null && yearsOfExperience !== '') {
+      const numExp = Number(yearsOfExperience);
+      if (isNaN(numExp) || numExp < 0 || numExp > 70) {
+        errors.yearsOfExperience = 'Please enter a valid non-negative number of years (0 - 70)';
+      } else {
+        cleanExperience = numExp;
+      }
+    }
+
+    // 7. Validate Qualifications (Multiple Selection)
+    let finalQual = highestQualification;
+    const custom = typeof customQualification === 'string' ? customQualification.trim() : (typeof otherQualification === 'string' ? otherQualification.trim() : '');
+    if ((finalQual === 'Other' || !finalQual) && custom) {
+      finalQual = custom;
+    }
+
+    let normalizedQuals = [];
+    if (Array.isArray(qualifications) && qualifications.length > 0) {
+      normalizedQuals = qualifications.map(q => (typeof q === 'string' ? q.trim() : '')).filter(Boolean);
+    } else if (finalQual && typeof finalQual === 'string' && finalQual.trim()) {
+      if (finalQual.includes(',')) {
+        normalizedQuals = finalQual.split(',').map(s => s.trim()).filter(Boolean);
+      } else {
+        normalizedQuals = [finalQual.trim()];
+      }
+    }
+
+    const cleanQuals = [];
+    normalizedQuals.forEach(q => {
+      if (typeof q !== 'string') return;
+      const trimmed = q.trim();
+      if (!trimmed || trimmed === 'Other') return;
+      cleanQuals.push(trimmed);
+    });
+    if (custom && !cleanQuals.includes(custom)) {
+      cleanQuals.push(custom);
+    }
+    const finalNormalizedQuals = Array.from(new Set(cleanQuals));
+
+    if (finalNormalizedQuals.length === 0 && (qualifications !== undefined || highestQualification !== undefined)) {
+      errors.qualifications = 'Please select at least one educational qualification';
+    }
+
     if (Object.keys(errors).length > 0) {
       return res.status(400).json({
         success: false,
@@ -503,28 +563,13 @@ exports.updateAdminProfile = async (req, res) => {
       user.department = typeof department === 'string' ? department.trim() : '';
     }
 
-    if (specialization !== undefined) {
-      user.specialization = typeof specialization === 'string' ? specialization.trim() : '';
+    if (highestQualification !== undefined || customQualification !== undefined || otherQualification !== undefined || qualifications !== undefined) {
+      user.qualifications = finalNormalizedQuals;
+      user.highestQualification = finalNormalizedQuals.join(', ');
     }
 
-    // Handle qualifications array & highestQualification only if provided
-    if (highestQualification !== undefined || customQualification !== undefined || otherQualification !== undefined || qualifications !== undefined) {
-      let finalQual = highestQualification;
-      const custom = typeof customQualification === 'string' ? customQualification.trim() : (typeof otherQualification === 'string' ? otherQualification.trim() : '');
-      if ((finalQual === 'Other' || !finalQual) && custom) {
-        finalQual = custom;
-      }
-
-      let normalizedQuals = [];
-      if (Array.isArray(qualifications) && qualifications.length > 0) {
-        normalizedQuals = qualifications.map(q => (typeof q === 'string' ? q.trim() : '')).filter(Boolean);
-      } else if (finalQual && typeof finalQual === 'string') {
-        normalizedQuals = [finalQual.trim()];
-      }
-      user.qualifications = normalizedQuals;
-      user.highestQualification = (typeof finalQual === 'string' && finalQual.trim())
-        ? finalQual.trim()
-        : (normalizedQuals[0] || '');
+    if (yearsOfExperience !== undefined) {
+      user.yearsOfExperience = cleanExperience;
     }
 
     if (profilePhoto !== undefined) {
@@ -554,7 +599,7 @@ exports.updateAdminProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: 'Administrator profile updated successfully',
       profile: {
         _id: user._id,
         userId: user.userId,
@@ -565,7 +610,7 @@ exports.updateAdminProfile = async (req, res) => {
         highestQualification: user.highestQualification,
         qualifications: user.qualifications,
         department: user.department,
-        specialization: user.specialization,
+        yearsOfExperience: user.yearsOfExperience ?? 0,
         profilePhoto: user.profilePhoto,
         role: user.role,
         isActive: user.isActive,
