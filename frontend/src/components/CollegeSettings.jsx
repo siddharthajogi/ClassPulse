@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import { Loader2, Save, Building, AlertCircle, CheckCircle2, Upload, Trash2 } from 'lucide-react';
 
 export default function CollegeSettings() {
@@ -24,37 +25,40 @@ export default function CollegeSettings() {
   const [imageLoadError, setImageLoadError] = useState(false);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const instRes = await adminApi.getInstitutionSetupStatus();
-        if (instRes.success && instRes.institution) {
-          const inst = instRes.institution;
-          setFormData({
-            logoUrl: inst.logoUrl || '',
-            name: inst.name || '',
-            code: inst.code || '',
-            description: inst.description || '',
-            email: inst.email || '',
-            phone: inst.phone || '',
-            // Retain any other existing fields to avoid losing metadata
-            type: inst.type || '',
-            website: inst.website || '',
-            address: inst.address || '',
-            city: inst.city || '',
-            state: inst.state || '',
-            country: inst.country || '',
-            timezone: inst.timezone || 'UTC'
-          });
-        }
-      } catch (err) {
-        setError('Failed to load college settings.');
-      } finally {
-        setLoading(false);
+  const fetchSettings = useCallback(async () => {
+    try {
+      const instRes = await adminApi.getInstitutionSetupStatus();
+      if (instRes.success && instRes.institution) {
+        const inst = instRes.institution;
+        setFormData({
+          logoUrl: inst.logoUrl || '',
+          name: inst.name || '',
+          code: inst.code || '',
+          description: inst.description || '',
+          email: inst.email || '',
+          phone: inst.phone || '',
+          // Retain any other existing fields to avoid losing metadata
+          type: inst.type || '',
+          website: inst.website || '',
+          address: inst.address || '',
+          city: inst.city || '',
+          state: inst.state || '',
+          country: inst.country || '',
+          timezone: inst.timezone || 'UTC'
+        });
       }
-    };
-    fetchSettings();
+    } catch (err) {
+      setError('Failed to load college settings.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  usePageRefresh(fetchSettings);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
 
   // Clean up object URL when component unmounts or preview changes
   useEffect(() => {

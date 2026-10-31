@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { 
   User, 
@@ -22,6 +22,7 @@ import {
   Check
 } from 'lucide-react';
 import { authApi, adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import { useTheme } from '../context/ThemeContext';
 import pkg from '../../package.json';
 
@@ -59,45 +60,43 @@ export default function GeneralSettings(props) {
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
 
-  // Load User Data if needed & Load Preferences
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadData = async () => {
-      // 1. Fetch current user if not provided
-      if (!currentUser) {
-        try {
-          const res = await authApi.getMe();
-          if (isMounted && res.success && res.user) {
-            setAdminUser(res.user);
-          }
-        } catch (err) {
-          console.error('Failed to fetch user in settings:', err);
-        } finally {
-          if (isMounted) setFetchingUser(false);
-        }
-      } else {
-        setAdminUser(currentUser);
-        setFetchingUser(false);
-      }
-
-      // 2. Fetch saved notification preferences from backend
+  const loadData = useCallback(async () => {
+    // 1. Fetch current user if not provided
+    if (!currentUser) {
       try {
-        setLoadingPrefs(true);
-        const res = await adminApi.getPreferences();
-        if (isMounted && res.success && res.preferences?.notifications) {
-          setNotifications(res.preferences.notifications);
+        const res = await authApi.getMe();
+        if (res.success && res.user) {
+          setAdminUser(res.user);
         }
       } catch (err) {
-        console.warn('Could not load preferences from backend:', err);
+        console.error('Failed to fetch user in settings:', err);
       } finally {
-        if (isMounted) setLoadingPrefs(false);
+        setFetchingUser(false);
       }
-    };
+    } else {
+      setAdminUser(currentUser);
+      setFetchingUser(false);
+    }
 
-    loadData();
-    return () => { isMounted = false; };
+    // 2. Fetch saved notification preferences from backend
+    try {
+      setLoadingPrefs(true);
+      const res = await adminApi.getPreferences();
+      if (res.success && res.preferences?.notifications) {
+        setNotifications(res.preferences.notifications);
+      }
+    } catch (err) {
+      console.warn('Could not load preferences from backend:', err);
+    } finally {
+      setLoadingPrefs(false);
+    }
   }, [currentUser]);
+
+  usePageRefresh(loadData);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Handle Notification Toggle
   const handleToggle = (key) => {

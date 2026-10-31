@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import ClassPulseLogo from './ClassPulseLogo';
 import { useTheme } from '../context/ThemeContext';
+import HeaderRefreshButton from './HeaderRefreshButton';
 
 const getTeacherPageName = (pathname) => {
   const cleanPath = pathname.replace(/\/+$/, '');
@@ -268,7 +269,10 @@ export default function TeacherLayout({ onLogout, currentUser }) {
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Top-Header Notifications Button (Emerald themed) */}
+            {/* 1. Global Refresh Button */}
+            <HeaderRefreshButton portal="teacher" />
+
+            {/* 2. Top-Header Notifications Button (Emerald themed) */}
             <Link
               to="/teacher/notifications"
               className={`relative inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors border cursor-pointer ${

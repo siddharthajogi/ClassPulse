@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, 
@@ -18,10 +18,12 @@ import {
   FileText,
   Clock,
   CheckSquare,
-  Square
+  Square,
+  RotateCcw
 } from 'lucide-react';
 import { adminApi } from '../api';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
+import { usePageRefresh } from '../context/RefreshContext';
 
 // Format relative date safely
 const formatRelativeTime = (timestamp) => {
@@ -84,6 +86,32 @@ export default function Notifications() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteModalError, setDeleteModalError] = useState('');
 
+  // 3-Second Undo & Delayed Deletion States
+  const [undoState, setUndoState] = useState(null);
+  const pendingDeletionsRef = useRef(new Map());
+
+  // Finalize all pending deletions immediately (flush to DB)
+  const finalizePendingDeletions = useCallback(async () => {
+    if (pendingDeletionsRef.current.size === 0) return;
+    const pendingOps = Array.from(new Set(Array.from(pendingDeletionsRef.current.values())));
+    pendingDeletionsRef.current.clear();
+    setUndoState(null);
+
+    for (const op of pendingOps) {
+      if (op.timerId) clearTimeout(op.timerId);
+      try {
+        if (op.type === 'single') {
+          await adminApi.deleteNotification(op.id);
+        } else if (op.type === 'bulk') {
+          await adminApi.bulkDeleteNotifications(op.ids);
+        }
+      } catch (err) {
+        console.error('Finalize pending deletion error:', err);
+      }
+    }
+    window.dispatchEvent(new Event('notifications-updated'));
+  }, []);
+
   const fetchNotifications = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     else setRefreshing(true);
@@ -98,13 +126,35 @@ export default function Notifications() {
       });
 
       if (res && res.success) {
-        setNotifications(res.notifications || []);
+        // Exclude any notifications that are currently pending deletion within the 3-second undo window
+        const pendingIds = Array.from(pendingDeletionsRef.current.keys());
+        const rawList = res.notifications || [];
+        const liveList = pendingIds.length > 0
+          ? rawList.filter(item => !pendingIds.includes(item._id))
+          : rawList;
+
+        setNotifications(liveList);
         if (res.pagination) {
           setTotalPages(res.pagination.totalPages || 1);
-          setTotalFiltered(res.pagination.total || 0);
+          setTotalFiltered(Math.max(0, (res.pagination.total || 0) - pendingIds.length));
         }
         if (res.counts) {
-          setCounts(res.counts);
+          let pendingUnread = 0;
+          let pendingRead = 0;
+          const uniqueOps = Array.from(new Set(Array.from(pendingDeletionsRef.current.values())));
+          uniqueOps.forEach(op => {
+            if (op.items) {
+              op.items.forEach(({ item }) => {
+                if (item.isRead) pendingRead++;
+                else pendingUnread++;
+              });
+            }
+          });
+          setCounts({
+            total: Math.max(0, res.counts.total - pendingIds.length),
+            unread: Math.max(0, res.counts.unread - pendingUnread),
+            read: Math.max(0, res.counts.read - pendingRead)
+          });
         }
       } else {
         setError(res?.error || 'Failed to load notifications');
@@ -121,6 +171,55 @@ export default function Notifications() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // 1-second countdown ticker for the Undo button
+  useEffect(() => {
+    if (!undoState) return;
+    const interval = setInterval(() => {
+      setUndoState(prev => {
+        if (!prev) return null;
+        if (prev.secondsLeft <= 1) return prev;
+        return { ...prev, secondsLeft: prev.secondsLeft - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [undoState?.id, undoState?.count]);
+
+  // Cleanup & safety: flush pending deletions on unmount or beforeunload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const pendingIds = Array.from(pendingDeletionsRef.current.keys());
+      if (pendingIds.length > 0) {
+        try {
+          fetch('/api/admin/notifications/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: pendingIds }),
+            keepalive: true
+          });
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      const pendingOps = Array.from(new Set(Array.from(pendingDeletionsRef.current.values())));
+      pendingOps.forEach(op => {
+        if (op.timerId) clearTimeout(op.timerId);
+        if (op.type === 'single') {
+          adminApi.deleteNotification(op.id).catch(() => {});
+        } else if (op.type === 'bulk') {
+          adminApi.bulkDeleteNotifications(op.ids).catch(() => {});
+        }
+      });
+      pendingDeletionsRef.current.clear();
+    };
+  }, []);
+
+  // Register with global header refresh button
+  usePageRefresh(() => fetchNotifications(true), [fetchNotifications]);
 
   // Clear selections when changing tabs, categories, or pagination
   useEffect(() => {
@@ -248,52 +347,235 @@ export default function Notifications() {
     }
   };
 
-  // Bulk Delete Trigger
-  const handleConfirmBulkDelete = async () => {
+  // Bulk Delete with 3-Second Undo
+  const handleConfirmBulkDelete = () => {
     if (bulkActionLoading || selectedIds.length === 0) return;
 
     const targetIds = [...selectedIds];
-    setBulkActionLoading(true);
+
+    // Finalize any previously pending deletion first
+    finalizePendingDeletions();
+
+    const itemsToDelete = notifications
+      .map((item, originalIndex) => ({ item, originalIndex }))
+      .filter(({ item }) => targetIds.includes(item._id));
+
+    setIsDeleteModalOpen(false);
     setDeleteModalError('');
+    setSelectedIds([]);
+
+    // 1. Remove from visible list immediately
+    setNotifications(prev => prev.filter(n => !targetIds.includes(n._id)));
+
+    let unreadCount = 0;
+    let readCount = 0;
+    itemsToDelete.forEach(({ item }) => {
+      if (item.isRead) readCount++;
+      else unreadCount++;
+    });
+
+    // 2. Optimistically adjust counts
+    setCounts(prev => ({
+      total: Math.max(0, prev.total - targetIds.length),
+      unread: Math.max(0, prev.unread - unreadCount),
+      read: Math.max(0, prev.read - readCount)
+    }));
+    setTotalFiltered(prev => Math.max(0, prev - targetIds.length));
+
+    // 3. Register pending deletion
+    const bulkData = {
+      type: 'bulk',
+      ids: targetIds,
+      items: itemsToDelete,
+      unreadCount,
+      readCount
+    };
+    targetIds.forEach(id => pendingDeletionsRef.current.set(id, bulkData));
+
+    // 4. Set 3-second timer for permanent DB deletion
+    const timerId = setTimeout(async () => {
+      await commitBulkDeletion(targetIds, itemsToDelete, unreadCount, readCount);
+    }, 3000);
+    bulkData.timerId = timerId;
+
+    // 5. Display 3-second Undo notification
+    setUndoState({
+      type: 'bulk',
+      ids: targetIds,
+      count: targetIds.length,
+      message: `${targetIds.length} notification${targetIds.length > 1 ? 's' : ''} deleted.`,
+      items: itemsToDelete,
+      unreadCount,
+      readCount,
+      timerId,
+      secondsLeft: 3
+    });
+  };
+
+  const commitBulkDeletion = async (targetIds, itemsToDelete, unreadCount, readCount) => {
+    setUndoState(prev => (prev?.type === 'bulk' && prev?.ids === targetIds ? null : prev));
+    targetIds.forEach(id => pendingDeletionsRef.current.delete(id));
+
     try {
       const res = await adminApi.bulkDeleteNotifications(targetIds);
       if (res && res.success) {
-        setIsDeleteModalOpen(false);
-        setSuccessMessage(res.message || `${res.deletedCount || targetIds.length} notification(s) deleted.`);
-        setSelectedIds(prev => prev.filter(id => !targetIds.includes(id)));
         window.dispatchEvent(new Event('notifications-updated'));
-        setTimeout(() => setSuccessMessage(''), 3500);
-        fetchNotifications(true);
       } else {
-        setDeleteModalError(res?.error || 'Failed to delete selected notifications');
+        throw new Error(res?.error || 'Bulk deletion failed');
       }
     } catch (err) {
-      console.error('Failed to delete selected notifications:', err);
-      setDeleteModalError(err?.response?.data?.error || err.message || 'Failed to delete notifications');
-    } finally {
-      setBulkActionLoading(false);
+      console.error('Permanent bulk deletion failed:', err);
+      // Restore notifications on failure
+      setNotifications(prev => {
+        const next = [...prev];
+        itemsToDelete
+          .sort((a, b) => a.originalIndex - b.originalIndex)
+          .forEach(({ item, originalIndex }) => {
+            if (!next.some(n => n._id === item._id)) {
+              const insertIdx = Math.min(originalIndex, next.length);
+              next.splice(insertIdx, 0, item);
+            }
+          });
+        return next;
+      });
+      setCounts(prev => ({
+        total: prev.total + targetIds.length,
+        unread: prev.unread + unreadCount,
+        read: prev.read + readCount
+      }));
+      setTotalFiltered(prev => prev + targetIds.length);
+      setError('Failed to permanently delete notifications. Items restored.');
     }
   };
 
-  // Dismiss / delete single notification
-  const handleDismiss = async (id, title, e) => {
+  // Delete single notification with 3-second Undo
+  const handleDeleteOne = (item, e) => {
     if (e) e.stopPropagation();
-    if (!window.confirm(`Dismiss notification "${title}"?`)) return;
 
-    setActionInProgress(prev => ({ ...prev, [id]: true }));
+    // Finalize any previously pending deletion first
+    finalizePendingDeletions();
+
+    const id = item._id;
+    const originalIndex = notifications.findIndex(n => n._id === id);
+    const wasRead = item.isRead;
+
+    // 1. Remove from visible list and active selections immediately
+    setNotifications(prev => prev.filter(n => n._id !== id));
+    setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
+
+    // 2. Optimistically adjust counts
+    setCounts(prev => ({
+      ...prev,
+      total: Math.max(0, prev.total - 1),
+      unread: !wasRead ? Math.max(0, prev.unread - 1) : prev.unread,
+      read: wasRead ? Math.max(0, prev.read - 1) : prev.read
+    }));
+    setTotalFiltered(prev => Math.max(0, prev - 1));
+
+    // 3. Register pending deletion
+    const singleData = {
+      type: 'single',
+      id,
+      items: [{ item, originalIndex: originalIndex >= 0 ? originalIndex : 0 }],
+      wasRead
+    };
+    pendingDeletionsRef.current.set(id, singleData);
+
+    // 4. Set 3-second timer for permanent DB deletion
+    const timerId = setTimeout(async () => {
+      await commitSingleDeletion(id, item, originalIndex, wasRead);
+    }, 3000);
+    singleData.timerId = timerId;
+
+    // 5. Display 3-second Undo notification
+    setUndoState({
+      type: 'single',
+      id,
+      title: item.title,
+      message: 'Notification deleted.',
+      items: [{ item, originalIndex: originalIndex >= 0 ? originalIndex : 0 }],
+      wasRead,
+      timerId,
+      secondsLeft: 3
+    });
+  };
+
+  const commitSingleDeletion = async (id, item, originalIndex, wasRead) => {
+    setUndoState(prev => (prev?.id === id ? null : prev));
+    pendingDeletionsRef.current.delete(id);
+
     try {
       const res = await adminApi.deleteNotification(id);
       if (res && res.success) {
-        setNotifications(prev => prev.filter(item => item._id !== id));
-        setSelectedIds(prev => prev.filter(item => item !== id));
         window.dispatchEvent(new Event('notifications-updated'));
-        fetchNotifications(true);
+      } else {
+        throw new Error(res?.error || 'Permanent deletion failed');
       }
     } catch (err) {
-      console.error('Failed to dismiss notification:', err);
-    } finally {
-      setActionInProgress(prev => ({ ...prev, [id]: false }));
+      console.error('Failed to permanently delete notification:', err);
+      // Restore on failure
+      setNotifications(prev => {
+        if (prev.some(n => n._id === item._id)) return prev;
+        const next = [...prev];
+        const insertIdx = Math.min(originalIndex >= 0 ? originalIndex : 0, next.length);
+        next.splice(insertIdx, 0, item);
+        return next;
+      });
+      setCounts(prev => ({
+        ...prev,
+        total: prev.total + 1,
+        unread: !wasRead ? prev.unread + 1 : prev.unread,
+        read: wasRead ? prev.read + 1 : prev.read
+      }));
+      setTotalFiltered(prev => prev + 1);
+      setError(`Failed to permanently delete "${item.title}". Notification restored.`);
     }
+  };
+
+  // Undo deletion handler
+  const handleUndo = () => {
+    if (!undoState) return;
+
+    if (undoState.timerId) {
+      clearTimeout(undoState.timerId);
+    }
+
+    const itemsToRestore = undoState.items || [];
+    setNotifications(prev => {
+      const next = [...prev];
+      itemsToRestore
+        .sort((a, b) => a.originalIndex - b.originalIndex)
+        .forEach(({ item, originalIndex }) => {
+          if (!next.some(n => n._id === item._id)) {
+            const insertIdx = Math.min(originalIndex, next.length);
+            next.splice(insertIdx, 0, item);
+          }
+        });
+      return next;
+    });
+
+    if (undoState.type === 'single') {
+      pendingDeletionsRef.current.delete(undoState.id);
+      setCounts(prev => ({
+        ...prev,
+        total: prev.total + 1,
+        unread: !undoState.wasRead ? prev.unread + 1 : prev.unread,
+        read: undoState.wasRead ? prev.read + 1 : prev.read
+      }));
+      setTotalFiltered(prev => prev + 1);
+    } else if (undoState.type === 'bulk') {
+      (undoState.ids || []).forEach(id => pendingDeletionsRef.current.delete(id));
+      setCounts(prev => ({
+        total: prev.total + (undoState.count || 0),
+        unread: prev.unread + (undoState.unreadCount || 0),
+        read: prev.read + (undoState.readCount || 0)
+      }));
+      setTotalFiltered(prev => prev + (undoState.count || 0));
+    }
+
+    setUndoState(null);
+    setSuccessMessage('Deletion undone. Notification restored.');
+    setTimeout(() => setSuccessMessage(''), 2500);
   };
 
   // Handle card click
@@ -354,94 +636,7 @@ export default function Notifications() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 transition-colors duration-200">
       
-      {/* 1. Page Header Row: Description on left, Refresh and Select All buttons on right */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Real-time administrative alerts for student events, faculty assignments, curriculum changes, academic risk flags, and security warnings.
-        </p>
-
-        {/* Global & Bulk Actions */}
-        <div className="flex items-center flex-wrap gap-2 sm:gap-2.5 shrink-0">
-          {/* Bulk Action Buttons: Shown only when 1 or more notifications are selected */}
-          {selectedIds.length > 0 && (
-            <>
-              <button
-                onClick={handleBulkMarkAsRead}
-                disabled={bulkActionLoading || !hasUnreadSelected}
-                type="button"
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-xs ${
-                  !hasUnreadSelected || bulkActionLoading
-                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
-                }`}
-                title={
-                  !hasUnreadSelected
-                    ? 'No selected notifications are unread'
-                    : `Mark ${selectedUnreadIds.length} notification${selectedUnreadIds.length > 1 ? 's' : ''} as read`
-                }
-              >
-                {bulkActionLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4" />
-                )}
-                <span>
-                  Mark as Read{hasUnreadSelected ? ` (${selectedUnreadIds.length})` : ''}
-                </span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setDeleteModalError('');
-                  setIsDeleteModalOpen(true);
-                }}
-                disabled={bulkActionLoading}
-                type="button"
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs disabled:cursor-not-allowed"
-                title="Delete selected notifications"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete ({selectedIds.length})</span>
-              </button>
-            </>
-          )}
-
-          {/* Refresh Button */}
-          <button
-            onClick={() => fetchNotifications(true)}
-            disabled={refreshing || loading}
-            type="button"
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-            title="Refresh notifications"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>Refresh</span>
-          </button>
-
-          {/* Select All / Deselect All Button (replaces Mark All as Read) */}
-          <button
-            onClick={handleToggleSelectAll}
-            disabled={loading || notifications.length === 0}
-            type="button"
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs disabled:cursor-not-allowed"
-            title={isAllSelected ? "Deselect all displayed notifications" : "Select all displayed notifications"}
-          >
-            {isAllSelected ? (
-              <>
-                <CheckSquare className="w-4 h-4" />
-                <span>Deselect All</span>
-              </>
-            ) : (
-              <>
-                <Square className="w-4 h-4" />
-                <span>Select All</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Overview Metric Cards */}
+      {/* 1. Overview Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-6 min-h-[105px] border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
@@ -497,9 +692,9 @@ export default function Notifications() {
         </div>
       )}
 
-      {/* 3. Filter Navigation (Tabs & Category Filter) */}
+      {/* 2. Filter Navigation (Tabs, Category Filters, & Select All) */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
-        {/* Status Tabs */}
+        {/* Status Tabs (Top-Left) */}
         <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
             <button
@@ -543,27 +738,98 @@ export default function Notifications() {
           </div>
         </div>
 
-        {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {CATEGORIES.map(cat => {
-            const Icon = cat.icon;
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
-                type="button"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-                  isSelected
-                    ? 'bg-indigo-50 dark:bg-indigo-950/70 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{cat.label}</span>
-              </button>
-            );
-          })}
+        {/* Category Pills & Bottom-Right Action Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
+          {/* Category Filter Buttons (Left) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0">
+            {CATEGORIES.map(cat => {
+              const Icon = cat.icon;
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border shrink-0 ${
+                    isSelected
+                      ? 'bg-indigo-50 dark:bg-indigo-950/70 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bottom-Right Corner Action Controls (Bulk Actions + Select All Button) */}
+          <div className="flex items-center flex-wrap gap-2 shrink-0 self-end sm:self-center">
+            {/* Bulk Action Buttons: Shown only when 1 or more notifications are selected */}
+            {selectedIds.length > 0 && (
+              <>
+                <button
+                  onClick={handleBulkMarkAsRead}
+                  disabled={bulkActionLoading || !hasUnreadSelected}
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-xs ${
+                    !hasUnreadSelected || bulkActionLoading
+                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                  }`}
+                  title={
+                    !hasUnreadSelected
+                      ? 'No selected notifications are unread'
+                      : `Mark ${selectedUnreadIds.length} notification${selectedUnreadIds.length > 1 ? 's' : ''} as read`
+                  }
+                >
+                  {bulkActionLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    Mark as Read{hasUnreadSelected ? ` (${selectedUnreadIds.length})` : ''}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setDeleteModalError('');
+                    setIsDeleteModalOpen(true);
+                  }}
+                  disabled={bulkActionLoading}
+                  type="button"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs disabled:cursor-not-allowed"
+                  title="Delete selected notifications"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete ({selectedIds.length})</span>
+                </button>
+              </>
+            )}
+
+            {/* Select All / Deselect All Button */}
+            <button
+              onClick={handleToggleSelectAll}
+              disabled={loading || notifications.length === 0}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs disabled:cursor-not-allowed whitespace-nowrap"
+              title={isAllSelected ? "Deselect all displayed notifications" : "Select all displayed notifications"}
+            >
+              {isAllSelected ? (
+                <>
+                  <CheckSquare className="w-4 h-4" />
+                  <span>Deselect All</span>
+                </>
+              ) : (
+                <>
+                  <Square className="w-4 h-4" />
+                  <span>Select All</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -642,20 +908,25 @@ export default function Notifications() {
 
                   {/* Notification Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${severityInfo.badgeClass}`}>
-                          {severityInfo.label}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                          {getCategoryLabel(item.category)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>{formatRelativeTime(item.createdAt)}</span>
-                      </div>
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${severityInfo.badgeClass}`}>
+                        {severityInfo.label}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                        {getCategoryLabel(item.category)}
+                      </span>
+                      {!item.isRead && (
+                        <button
+                          onClick={(e) => handleMarkAsRead(item._id, e)}
+                          disabled={isItemLoading || bulkActionLoading}
+                          type="button"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer disabled:opacity-50 text-[11px] font-medium"
+                          title="Mark as read"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Mark read</span>
+                        </button>
+                      )}
                     </div>
 
                     <h3 className={`text-sm sm:text-base font-bold ${
@@ -669,44 +940,46 @@ export default function Notifications() {
                     <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                       {item.message}
                     </p>
+                  </div>
 
-                    {/* Footer Actions */}
-                    <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between flex-wrap gap-2 text-xs">
-                      <div>
-                        {item.destinationUrl && (
-                          <span className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">
-                            <span>Open destination</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {!item.isRead && (
-                          <button
-                            onClick={(e) => handleMarkAsRead(item._id, e)}
-                            disabled={isItemLoading || bulkActionLoading}
-                            type="button"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                            title="Mark as read"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Mark read</span>
-                          </button>
-                        )}
-
-                        <button
-                          onClick={(e) => handleDismiss(item._id, item.title, e)}
-                          disabled={isItemLoading || bulkActionLoading}
-                          type="button"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                          title="Dismiss notification"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Dismiss</span>
-                        </button>
-                      </div>
+                  {/* Right-aligned Vertical Stack:
+                      1. Date and time (first)
+                      2. Open Destination (immediately below date)
+                      3. Delete (immediately below Open Destination)
+                  */}
+                  <div className="flex flex-col items-end shrink-0 gap-1.5 text-xs pt-0.5">
+                    {/* 1. Date and time (first) */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{formatRelativeTime(item.createdAt)}</span>
                     </div>
+
+                    {/* 2. Open Destination (immediately below date) */}
+                    {item.destinationUrl && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNotificationClick(item);
+                        }}
+                        className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer whitespace-nowrap py-0.5"
+                        title="Open destination"
+                      >
+                        <span>Open Destination</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+
+                    {/* 3. Delete (immediately below Open Destination) */}
+                    <button
+                      onClick={(e) => handleDeleteOne(item, e)}
+                      disabled={isItemLoading || bulkActionLoading}
+                      type="button"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap font-medium"
+                      title="Delete notification"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -755,11 +1028,32 @@ export default function Notifications() {
         }}
         onConfirm={handleConfirmBulkDelete}
         title={`Delete ${selectedIds.length} Notification${selectedIds.length > 1 ? 's' : ''}?`}
-        message={`Are you sure you want to permanently delete the ${selectedIds.length} selected notification${selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.`}
+        message={`Are you sure you want to delete the ${selectedIds.length} selected notification${selectedIds.length > 1 ? 's' : ''}? You will have 3 seconds to undo this action.`}
         confirmText="Delete Selected"
         loading={bulkActionLoading}
         error={deleteModalError}
       />
+
+      {/* 7. 3-Second Floating Undo Banner / Toast */}
+      {undoState && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3.5 px-4.5 py-3 bg-slate-900 text-slate-100 dark:bg-slate-800 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-700 dark:border-slate-700 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-2.5">
+            <Trash2 className="w-4 h-4 text-rose-500 shrink-0" />
+            <span className="text-xs sm:text-sm font-medium">
+              {undoState.message}
+            </span>
+          </div>
+          <button
+            onClick={handleUndo}
+            type="button"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+            title="Undo deletion within 3 seconds"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Undo ({undoState.secondsLeft}s)</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

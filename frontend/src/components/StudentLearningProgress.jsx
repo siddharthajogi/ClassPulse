@@ -3,6 +3,7 @@ import { TrendingUp, Award, Target, CheckCircle2, RefreshCw, Loader2, AlertCircl
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { studentApi } from '../api';
 import { useTheme } from '../context/ThemeContext';
+import { usePageRefresh } from '../context/RefreshContext';
 
 export default function StudentLearningProgress() {
   const { isDark } = useTheme();
@@ -30,6 +31,9 @@ export default function StudentLearningProgress() {
   useEffect(() => {
     fetchProgress();
   }, []);
+
+  // Register with global header refresh button
+  usePageRefresh(fetchProgress, []);
 
   const academicRecords = data?.academicRecords || [];
 
@@ -72,7 +76,7 @@ export default function StudentLearningProgress() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-600 dark:text-pink-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E3A8A] dark:text-blue-400" />
         <p className="text-sm font-medium">Loading your learning progress...</p>
       </div>
     );
@@ -86,7 +90,7 @@ export default function StudentLearningProgress() {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{error}</p>
         <button
           onClick={fetchProgress}
-          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          className="px-4 py-2 bg-[#1E3A8A] hover:bg-[#172554] text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
         >
           Try Again
         </button>
@@ -104,7 +108,7 @@ export default function StudentLearningProgress() {
               My Learning Progress
             </h1>
             {overallProgress !== null && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/80">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1E3A8A] dark:text-blue-300 border border-blue-200 dark:border-blue-900/80">
                 {overallProgress}% Average Mastery
               </span>
             )}
@@ -113,14 +117,6 @@ export default function StudentLearningProgress() {
             Academic growth trajectories, concept mastery curves, and evaluation milestones.
           </p>
         </div>
-
-        <button
-          onClick={fetchProgress}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
-          <span>Refresh</span>
-        </button>
       </div>
 
       {/* Progress Chart Card */}
@@ -135,7 +131,7 @@ export default function StudentLearningProgress() {
                 Verified score percentages recorded across continuous evaluation modules
               </p>
             </div>
-            <span className="text-2xl font-black text-pink-600 dark:text-pink-400">
+            <span className="text-2xl font-black text-[#1E3A8A] dark:text-blue-400">
               {overallProgress}%
             </span>
           </div>
@@ -147,7 +143,7 @@ export default function StudentLearningProgress() {
                 <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fill: axisTickColor, fontSize: 11 }} dy={10} />
                 <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: axisTickColor, fontSize: 12 }} />
                 <Tooltip cursor={{ stroke: isDark ? '#475569' : '#cbd5e1', strokeWidth: 1, strokeDasharray: '3 3' }} contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="percentage" name="Score (%)" stroke="#ec4899" strokeWidth={3} dot={{ r: 5, strokeWidth: 2 }} activeDot={{ r: 7 }} />
+                <Line type="monotone" dataKey="percentage" name="Score (%)" stroke="#1E3A8A" strokeWidth={3} dot={{ r: 5, strokeWidth: 2 }} activeDot={{ r: 7 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

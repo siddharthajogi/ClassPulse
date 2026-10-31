@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import { 
   Users, 
   ArrowLeft, 
@@ -63,6 +64,9 @@ export default function ActiveAccountsList() {
   useEffect(() => {
     fetchAccounts();
   }, []);
+
+  // Register with global header refresh button
+  usePageRefresh(fetchAccounts, []);
 
   // Filter accounts by search term and role
   const filteredAccounts = accounts.filter(acc => {
@@ -152,7 +156,7 @@ export default function ActiveAccountsList() {
       case 'student':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/60">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1E3A8A] dark:text-blue-300 border border-blue-200 dark:border-blue-900/60">
             <BookOpen className="w-3.5 h-3.5" />
             Student
           </span>
@@ -192,16 +196,6 @@ export default function ActiveAccountsList() {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={fetchAccounts}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-            title="Refresh Account List"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
-
           <Link
             to="/admin/dashboard"
             className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"

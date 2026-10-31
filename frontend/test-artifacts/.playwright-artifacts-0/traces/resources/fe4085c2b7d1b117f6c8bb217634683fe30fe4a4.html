@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClassPulse - Academic Portal</title>
+    <meta name="description" content="ClassPulse - Academic and Institutional Portal for Students, Faculty, and Administrators." />
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('classpulse_theme') || localStorage.getItem('study_point_theme');
+          if (saved === 'dark') {
+            document.documentElement.classList.add('dark');
+            if (document.body) document.body.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx?t=1792919472437"></script>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Bell, CheckCheck, RefreshCw, Filter, Sparkles, BookOpen, Layers, Users, AlertCircle } from 'lucide-react';
+import { usePageRefresh } from '../context/RefreshContext';
 
 export default function TeacherNotifications({ currentUser }) {
   const [activeTab, setActiveTab] = useState('all');
@@ -12,10 +13,13 @@ export default function TeacherNotifications({ currentUser }) {
     { id: 'students', label: 'Student Alerts', icon: Users }
   ];
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 600);
+    await new Promise(r => setTimeout(r, 400));
+    setRefreshing(false);
   };
+
+  usePageRefresh(handleRefresh);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -34,15 +38,6 @@ export default function TeacherNotifications({ currentUser }) {
             Faculty updates, academic schedule changes, and student alerts.
           </p>
         </div>
-
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
       </div>
 
       {/* Category Tabs */}

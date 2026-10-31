@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FileText, Award, Calendar, RefreshCw, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { studentApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 
 export default function StudentAcademicRecords() {
   const [data, setData] = useState(null);
@@ -28,6 +29,9 @@ export default function StudentAcademicRecords() {
     fetchRecords();
   }, []);
 
+  // Register with global header refresh button
+  usePageRefresh(fetchRecords, []);
+
   const academicRecords = data?.academicRecords || [];
 
   const { overallPercentage, totalMarksObtained, totalMarksPossible } = useMemo(() => {
@@ -52,7 +56,7 @@ export default function StudentAcademicRecords() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-600 dark:text-pink-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E3A8A] dark:text-blue-400" />
         <p className="text-sm font-medium">Loading your academic records...</p>
       </div>
     );
@@ -66,7 +70,7 @@ export default function StudentAcademicRecords() {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{error}</p>
         <button
           onClick={fetchRecords}
-          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          className="px-4 py-2 bg-[#1E3A8A] hover:bg-[#172554] text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
         >
           Try Again
         </button>
@@ -83,7 +87,7 @@ export default function StudentAcademicRecords() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
               My Academic Records
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/80">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1E3A8A] dark:text-blue-300 border border-blue-200 dark:border-blue-900/80">
               {academicRecords.length} {academicRecords.length === 1 ? 'Record' : 'Records'}
             </span>
           </div>
@@ -91,14 +95,6 @@ export default function StudentAcademicRecords() {
             Official grading transcripts, continuous assessments, and evaluation history.
           </p>
         </div>
-
-        <button
-          onClick={fetchRecords}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
-          <span>Refresh</span>
-        </button>
       </div>
 
       {/* Summary KPI Cards */}
@@ -111,7 +107,7 @@ export default function StudentAcademicRecords() {
           </div>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-xs">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Cumulative Average</p>
-            <p className="text-3xl font-bold text-pink-600 dark:text-pink-400 mt-2">
+            <p className="text-3xl font-bold text-[#1E3A8A] dark:text-blue-400 mt-2">
               {overallPercentage !== null ? `${overallPercentage}%` : '--'}
             </p>
             <p className="text-xs text-slate-500 mt-1">Overall score across subjects</p>
@@ -164,7 +160,7 @@ export default function StudentAcademicRecords() {
                       <td className="px-6 py-4 text-slate-500">
                         {r.totalMarks}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-pink-600 dark:text-pink-400">
+                      <td className="px-6 py-4 font-semibold text-[#1E3A8A] dark:text-blue-400">
                         {pct !== null ? `${pct}%` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-300">

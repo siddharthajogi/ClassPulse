@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import {
   ArrowLeft,
   User,
@@ -137,6 +138,8 @@ export default function TeacherProfile() {
       setLoading(false);
     }
   };
+
+  usePageRefresh(fetchTeacherData, [id]);
 
   useEffect(() => {
     fetchTeacherData();

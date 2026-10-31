@@ -65,9 +65,9 @@ export default function ChangePasswordForm({ user, onPasswordChanged, onLogout }
       moon: 'text-emerald-600'
     },
     student: {
-      btn: 'bg-pink-600 hover:bg-pink-700',
-      ring: 'focus:ring-pink-500',
-      moon: 'text-pink-600'
+      btn: 'bg-[#1E3A8A] hover:bg-[#172554]',
+      ring: 'focus:ring-[#1E3A8A]',
+      moon: 'text-[#1E3A8A]'
     },
     admin: {
       btn: 'bg-blue-600 hover:bg-blue-700',

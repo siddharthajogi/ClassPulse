@@ -14,11 +14,14 @@ import {
   Moon,
   Bell,
   Check,
-  ChevronDown
+  ChevronDown,
+  Menu,
+  X
 } from 'lucide-react';
 import ClassPulseLogo from './ClassPulseLogo';
 import { useTheme } from '../context/ThemeContext';
 import { adminApi } from '../api';
+import HeaderRefreshButton from './HeaderRefreshButton';
 
 const getCurrentPageName = (pathname) => {
   const cleanPath = pathname.replace(/\/+$/, '');
@@ -51,11 +54,55 @@ const getCurrentPageName = (pathname) => {
     .join(' ');
 };
 
+const isRouteActive = (itemPath, currentPath) => {
+  const cleanPath = currentPath.replace(/\/+$/, '');
+
+  if (itemPath === '/admin/dashboard') {
+    return cleanPath === '/admin' || cleanPath === '/admin/dashboard';
+  }
+  if (itemPath === '/admin/students/create') {
+    return cleanPath === '/admin/students/create';
+  }
+  if (itemPath === '/admin/students') {
+    return (
+      cleanPath === '/admin/students' ||
+      (cleanPath.startsWith('/admin/students/') && cleanPath !== '/admin/students/create')
+    );
+  }
+  if (itemPath === '/admin/teachers/create') {
+    return cleanPath === '/admin/teachers/create';
+  }
+  if (itemPath === '/admin/teachers') {
+    return (
+      cleanPath === '/admin/teachers' ||
+      (cleanPath.startsWith('/admin/teachers/') && cleanPath !== '/admin/teachers/create')
+    );
+  }
+  if (itemPath === '/admin/classes') {
+    return (
+      cleanPath === '/admin/classes' ||
+      cleanPath.startsWith('/admin/classes/') ||
+      cleanPath === '/admin/assignments'
+    );
+  }
+  if (itemPath === '/admin/settings') {
+    return (
+      cleanPath === '/admin/settings' ||
+      cleanPath.startsWith('/admin/settings/') ||
+      cleanPath === '/admin/college-settings'
+    );
+  }
+  return cleanPath === itemPath || cleanPath.startsWith(itemPath + '/');
+};
+
 export default function AdminLayout({ onLogout, currentUser }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const currentPageName = getCurrentPageName(location.pathname);
+
+  // Mobile sidebar drawer state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Notification Unread Count State
   const [unreadCount, setUnreadCount] = useState(0);
@@ -68,6 +115,11 @@ export default function AdminLayout({ onLogout, currentUser }) {
     await onLogout();
     navigate('/');
   };
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   // Fetch unread notification count
   const refreshNotifications = useCallback(async () => {
@@ -133,59 +185,125 @@ export default function AdminLayout({ onLogout, currentUser }) {
     { name: 'My Profile', icon: Users, path: '/admin/profile' },
   ];
 
+  const renderNavLinks = (closeMobile = false) => (
+    <nav className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-1">
+      {menuItems.map((item) => {
+        const isActive = isRouteActive(item.path, location.pathname);
+        return (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            onClick={() => {
+              if (closeMobile) setMobileMenuOpen(false);
+            }}
+            className={() =>
+              `group flex items-center justify-between px-3 py-2 text-xs sm:text-sm font-medium rounded-xl border-l-4 transition-all duration-150 ${
+                isActive
+                  ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 font-semibold border-indigo-600 dark:border-indigo-500 shadow-2xs'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 hover:text-indigo-700 dark:hover:text-indigo-300'
+              }`
+            }
+          >
+            <div className="flex items-center gap-3">
+              <item.icon
+                className={`w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0 transition-colors ${
+                  isActive
+                    ? 'text-indigo-600 dark:text-indigo-400'
+                    : 'text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'
+                }`}
+              />
+              <span>{item.name}</span>
+            </div>
+
+            {item.hasBadge && unreadCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white shadow-2xs">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
-      {/* Sidebar Navigation */}
+      {/* Desktop & Tablet Sidebar */}
       <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col hidden md:flex transition-colors duration-200 shrink-0">
-        <div className="pt-8 pb-6 px-4 border-b border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-center">
-          <div className="inline-flex items-center justify-center mb-3">
+        <div className="pt-7 pb-5 px-4 border-b border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-center">
+          <div className="inline-flex items-center justify-center mb-2.5">
             <ClassPulseLogo size="lg" className="hover:scale-105 transition-transform duration-200" />
           </div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">ClassPulse</h2>
+          <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">ClassPulse</h2>
           <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80">
             Admin Portal
           </span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {menuItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/admin/dashboard'}
-              className={({ isActive }) =>
-                `flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-semibold'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100'
-                }`
-              }
-            >
-              <div className="flex items-center gap-3">
-                <item.icon className="w-5 h-5 shrink-0" />
-                <span>{item.name}</span>
-              </div>
+        {/* 13 Navigation Links in Specified Order */}
+        {renderNavLinks(false)}
 
-              {item.hasBadge && unreadCount > 0 && (
-                <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-rose-500 text-white shadow-2xs">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+        {/* Bottom of Sidebar: Logout */}
+        <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+            className="flex items-center gap-3 px-3 py-2.5 w-full text-xs sm:text-sm font-medium text-rose-600 dark:text-rose-400 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
           >
-            <LogOut className="w-5 h-5 shrink-0" />
+            <LogOut className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
             <span>Logout</span>
           </button>
         </div>
       </aside>
+
+      {/* Mobile Sidebar Slide-Over Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+
+          {/* Drawer content */}
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl z-10 animate-in slide-in-from-left duration-200">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ClassPulseLogo size="sm" />
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    ClassPulse
+                  </h2>
+                  <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                    Admin Portal
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                title="Close Navigation Menu"
+                aria-label="Close Navigation Menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {renderNavLinks(true)}
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-3 py-2.5 w-full text-sm font-medium text-rose-600 dark:text-rose-400 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Main Content Area with Header */}
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -193,14 +311,28 @@ export default function AdminLayout({ onLogout, currentUser }) {
         {/* Shared Top Header (Desktop & Mobile) */}
         <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 lg:px-8 py-3.5 flex justify-between items-center transition-colors duration-200 shrink-0">
           <div className="flex items-center gap-3">
-            <ClassPulseLogo size="sm" className="md:hidden shrink-0" />
+            {/* Mobile hamburger menu toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 -ml-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl md:hidden cursor-pointer"
+              title="Open Navigation Menu"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </button>
+
+            <ClassPulseLogo size="xs" className="hidden sm:block md:hidden shrink-0" />
             <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
               {currentPageName}
             </h1>
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Task 2: Single Clickable Notifications Navigation Control */}
+            {/* 1. Global Refresh Button */}
+            <HeaderRefreshButton portal="admin" />
+
+            {/* 2. Top-Header Notifications Navigation Control */}
             <Link
               to="/admin/notifications"
               className={`relative inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors border cursor-pointer ${

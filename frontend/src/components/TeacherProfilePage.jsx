@@ -25,7 +25,8 @@ import {
   Clock
 } from 'lucide-react';
 import { teacherApi, authApi } from '../api';
-import { QUALIFICATION_OPTIONS, STANDARD_QUALIFICATIONS } from '../config/qualifications';
+import { TEACHER_QUALIFICATION_OPTIONS, STANDARD_TEACHER_QUALIFICATIONS } from '../config/qualifications';
+import { usePageRefresh } from '../context/RefreshContext';
 
 // Helper to generate initials from full name or user ID
 const getInitials = (name, fallbackId = 'TC') => {
@@ -51,6 +52,64 @@ const formatDate = (isoString) => {
   }
 };
 
+// Helper to parse and migrate qualifications
+const parseQualifications = (p) => {
+  let rawList = [];
+  if (Array.isArray(p?.qualifications) && p.qualifications.length > 0) {
+    rawList = p.qualifications;
+  } else if (p?.highestQualification && typeof p.highestQualification === 'string') {
+    if (p.highestQualification.includes(',')) {
+      rawList = p.highestQualification.split(',').map(s => s.trim()).filter(Boolean);
+    } else {
+      rawList = [p.highestQualification.trim()];
+    }
+  }
+
+  const migrated = [];
+  const custom = [];
+
+  rawList.forEach(item => {
+    if (!item || typeof item !== 'string') return;
+    const trimmed = item.trim();
+    if (!trimmed) return;
+
+    if (trimmed === 'B.Tech / B.E.') {
+      migrated.push('B.Tech', 'B.E.');
+    } else if (trimmed === 'M.Tech / M.E.') {
+      migrated.push('M.Tech', 'M.E.');
+    } else if (STANDARD_TEACHER_QUALIFICATIONS.includes(trimmed)) {
+      migrated.push(trimmed);
+    } else if (trimmed === 'Other') {
+      // Handled via hasOther
+    } else {
+      custom.push(trimmed);
+    }
+  });
+
+  const uniqueSelected = Array.from(new Set(migrated));
+  return {
+    selectedQualifications: uniqueSelected,
+    customQualificationText: custom.join(', '),
+    hasOther: custom.length > 0 || rawList.includes('Other')
+  };
+};
+
+// Helper to format qualifications for comma-separated display
+const getDisplayQualifications = (p) => {
+  if (!p) return 'Not specified';
+  const { selectedQualifications, customQualificationText } = parseQualifications(p);
+  const items = [...selectedQualifications];
+  if (customQualificationText) {
+    customQualificationText.split(',').map(s => s.trim()).filter(Boolean).forEach(c => {
+      if (!items.includes(c)) items.push(c);
+    });
+  }
+  if (items.length > 0) {
+    return items.join(', ');
+  }
+  return p.highestQualification || 'Not specified';
+};
+
 export default function TeacherProfilePage({ currentUser, onPasswordChanged, onLogout }) {
   // Master Profile Data from Database
   const [profile, setProfile] = useState(null);
@@ -70,10 +129,9 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
     phone: '',
     address: '',
     designation: '',
-    highestQualification: '',
+    qualifications: [],
     customQualification: '',
     department: '',
-    specialization: '',
     yearsOfExperience: '',
     profilePhoto: ''
   });
@@ -146,11 +204,12 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
     loadProfileData();
   }, []);
 
+  // Register with global header refresh button
+  usePageRefresh(loadProfileData, []);
+
   // Populate form data from profile model
   const populateFormData = (p) => {
-    const qual = p.highestQualification || (Array.isArray(p.qualifications) && p.qualifications[0]) || '';
-    const isStandard = STANDARD_QUALIFICATIONS.includes(qual);
-    const isOther = !isStandard && Boolean(qual) && qual !== 'Other';
+    const { selectedQualifications, customQualificationText, hasOther } = parseQualifications(p);
 
     setFormData({
       name: p.name || '',
@@ -158,15 +217,14 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
       phone: p.phone || '',
       address: p.address || '',
       designation: p.designation || '',
-      highestQualification: isStandard ? qual : (qual ? 'Other' : ''),
-      customQualification: isOther ? qual : '',
+      qualifications: selectedQualifications,
+      customQualification: customQualificationText,
       department: p.department || '',
-      specialization: p.specialization || '',
       yearsOfExperience: p.yearsOfExperience !== undefined && p.yearsOfExperience !== null ? String(p.yearsOfExperience) : '',
       profilePhoto: p.profilePhoto || ''
     });
 
-    setIsOtherQualification(isOther || qual === 'Other');
+    setIsOtherQualification(hasOther);
     setFormErrors({});
   };
 
@@ -202,28 +260,38 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
     }
   };
 
-  // Handle Qualification Dropdown Change
-  const handleQualificationChange = (e) => {
-    const val = e.target.value;
-    if (val === 'Other') {
-      setIsOtherQualification(true);
-      setFormData(prev => ({
-        ...prev,
-        highestQualification: 'Other',
-        customQualification: prev.customQualification || ''
-      }));
-    } else {
-      setIsOtherQualification(false);
-      setFormData(prev => ({
-        ...prev,
-        highestQualification: val,
-        customQualification: ''
-      }));
+  // Handle Qualification Checkbox Toggle
+  const handleToggleQualification = (opt) => {
+    if (opt === 'Other') {
+      setIsOtherQualification(prev => {
+        const nextVal = !prev;
+        if (!nextVal) {
+          setFormData(f => ({ ...f, customQualification: '' }));
+        }
+        return nextVal;
+      });
+      if (formErrors.qualifications) {
+        setFormErrors(prev => {
+          const copy = { ...prev };
+          delete copy.qualifications;
+          return copy;
+        });
+      }
+      return;
     }
-    if (formErrors.highestQualification) {
+
+    setFormData(prev => {
+      const current = prev.qualifications || [];
+      const updated = current.includes(opt)
+        ? current.filter(item => item !== opt)
+        : [...current, opt];
+      return { ...prev, qualifications: updated };
+    });
+
+    if (formErrors.qualifications) {
       setFormErrors(prev => {
         const copy = { ...prev };
-        delete copy.highestQualification;
+        delete copy.qualifications;
         return copy;
       });
     }
@@ -386,14 +454,18 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
       }
     }
 
-    if (isOtherQualification && !formData.customQualification.trim()) {
-      errors.highestQualification = 'Please specify your qualification';
+    const hasStandard = (formData.qualifications || []).length > 0;
+    const hasCustom = isOtherQualification && Boolean(formData.customQualification?.trim());
+    if (isOtherQualification && !formData.customQualification?.trim()) {
+      errors.qualifications = 'Please specify your other qualification';
+    } else if (!hasStandard && !hasCustom) {
+      errors.qualifications = 'Please select at least one educational qualification';
     }
 
     if (formData.yearsOfExperience !== '' && formData.yearsOfExperience !== undefined) {
       const num = Number(formData.yearsOfExperience);
       if (isNaN(num) || num < 0 || num > 70) {
-        errors.yearsOfExperience = 'Please enter a valid number of years (0 - 70)';
+        errors.yearsOfExperience = 'Please enter a valid non-negative number of years (0 - 70)';
       }
     }
 
@@ -414,10 +486,14 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
     setSaving(true);
 
     try {
-      // Determine final qualification string
-      let finalQualification = formData.highestQualification;
-      if (isOtherQualification) {
-        finalQualification = formData.customQualification.trim() || 'Other';
+      const finalQualifications = [...(formData.qualifications || []).filter(q => q !== 'Other')];
+      if (isOtherQualification && formData.customQualification?.trim()) {
+        const customItems = formData.customQualification.split(',').map(s => s.trim()).filter(Boolean);
+        customItems.forEach(item => {
+          if (!finalQualifications.includes(item)) {
+            finalQualifications.push(item);
+          }
+        });
       }
 
       const payload = {
@@ -426,10 +502,9 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
         phone: formData.phone.trim(),
         address: formData.address.trim(),
         designation: formData.designation.trim(),
-        highestQualification: finalQualification,
-        qualifications: finalQualification ? [finalQualification] : [],
+        highestQualification: finalQualifications.join(', '),
+        qualifications: finalQualifications,
         department: formData.department.trim(),
-        specialization: formData.specialization.trim(),
         yearsOfExperience: formData.yearsOfExperience !== '' ? Number(formData.yearsOfExperience) : 0,
         profilePhoto: formData.profilePhoto
       };
@@ -1058,50 +1133,70 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
               )}
             </div>
 
-            {/* Highest Educational Qualification */}
+            {/* Educational Qualifications (Multiple Selection) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Highest Educational Qualification
+                Educational Qualifications {isEditing && <span className="text-rose-500">*</span>}
               </label>
               {isEditing ? (
-                <div className="space-y-2">
-                  <select
-                    value={formData.highestQualification}
-                    onChange={handleQualificationChange}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
-                  >
-                    <option value="">Select Qualification...</option>
-                    {QUALIFICATION_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {TEACHER_QUALIFICATION_OPTIONS.map((opt) => {
+                      const isSelected = opt === 'Other'
+                        ? isOtherQualification
+                        : (formData.qualifications || []).includes(opt);
+
+                      return (
+                        <label
+                          key={opt}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-pointer transition-all select-none ${
+                            isSelected
+                              ? 'bg-emerald-50/90 dark:bg-emerald-950/60 border-emerald-500 dark:border-emerald-500 text-emerald-900 dark:text-emerald-100 shadow-2xs font-semibold'
+                              : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleQualification(opt)}
+                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-600 dark:bg-slate-700 cursor-pointer accent-emerald-600 shrink-0"
+                          />
+                          <span className="truncate">{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
 
                   {/* Custom Qualification input when "Other" is chosen */}
                   {isOtherQualification && (
-                    <div>
+                    <div className="space-y-1 pt-1">
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Specify Other Qualification <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={formData.customQualification}
                         onChange={(e) => handleInputChange('customQualification', e.target.value)}
-                        placeholder="Enter your custom qualification"
+                        placeholder="e.g. Post-Doctorate, M.Phil., PG Diploma"
                         className={`w-full px-3.5 py-2 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors ${
-                          formErrors.highestQualification
+                          formErrors.qualifications
                             ? 'border-rose-400 dark:border-rose-500'
                             : 'border-slate-200 dark:border-slate-700'
                         }`}
                       />
-                      {formErrors.highestQualification && (
-                        <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.highestQualification}</p>
-                      )}
                     </div>
+                  )}
+
+                  {formErrors.qualifications && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.qualifications}</p>
                   )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
                   <GraduationCap className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>{profile.highestQualification || 'Not specified'}</span>
+                  <span className="break-words">
+                    {getDisplayQualifications(profile)}
+                  </span>
                 </div>
               )}
             </div>
@@ -1143,150 +1238,103 @@ export default function TeacherProfilePage({ currentUser, onPasswordChanged, onL
               )}
             </div>
 
-            {/* Specialization & Years of Experience Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Specialization */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Specialization
-                </label>
-                {isEditing ? (
-                  <div>
-                    <input
-                      type="text"
-                      value={formData.specialization}
-                      onChange={(e) => handleInputChange('specialization', e.target.value)}
-                      placeholder="e.g. AI & Machine Learning"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
-                    <Award className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="truncate">{profile.specialization || 'Not specified'}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Years of Experience */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Experience (Years)
-                </label>
-                {isEditing ? (
-                  <div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="70"
-                      value={formData.yearsOfExperience}
-                      onChange={(e) => handleInputChange('yearsOfExperience', e.target.value)}
-                      placeholder="e.g. 5"
-                      className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors ${
-                        formErrors.yearsOfExperience 
-                          ? 'border-rose-400 dark:border-rose-500 bg-rose-50/20' 
-                          : 'border-slate-200 dark:border-slate-700'
-                      }`}
-                    />
-                    {formErrors.yearsOfExperience && (
-                      <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.yearsOfExperience}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
-                    <Clock className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>{profile.yearsOfExperience ? `${profile.yearsOfExperience} Years` : '0 Years'}</span>
-                  </div>
-                )}
-              </div>
+            {/* Experience (Years) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Experience (Years)
+              </label>
+              {isEditing ? (
+                <div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="70"
+                    value={formData.yearsOfExperience}
+                    onChange={(e) => handleInputChange('yearsOfExperience', e.target.value)}
+                    placeholder="e.g. 5"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors ${
+                      formErrors.yearsOfExperience 
+                        ? 'border-rose-400 dark:border-rose-500 bg-rose-50/20' 
+                        : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                  />
+                  {formErrors.yearsOfExperience && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{formErrors.yearsOfExperience}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 text-sm font-medium text-slate-900 dark:text-slate-100">
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>{profile.yearsOfExperience !== undefined && profile.yearsOfExperience !== null ? `${profile.yearsOfExperience} Years` : '0 Years'}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 4. Account & Security Information Card */}
+        {/* 4. Password & Security Settings Card */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
           <div className="flex items-center justify-between pb-4 mb-1 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="w-5 h-5" />
+                <KeyRound className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Account & Security Information</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Immutable system credentials and security status</p>
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Password & Security Settings</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Manage account authentication credentials and security</p>
               </div>
             </div>
-
-            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-              <Lock className="w-3.5 h-3.5" />
-              <span>Protected System Fields</span>
-            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-            {/* Teacher ID */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Teacher ID
+          <div className="p-5 sm:p-6 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                Change Password
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Keep your account secure by updating your password regularly.
               </p>
-              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                {profile.userId || profile.teacherId}
-              </p>
-              <p className="text-[10px] text-slate-400">Unique faculty identifier</p>
             </div>
 
-            {/* Assigned Role */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Account Role
-              </p>
-              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 capitalize">
-                {profile.role || 'Teacher'}
-              </p>
-              <p className="text-[10px] text-slate-400">Faculty portal privileges</p>
-            </div>
-
-            {/* Account Status */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Account Status
-              </p>
-              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                {profile.isActive ? 'Active' : 'Disabled'}
-              </p>
-              <p className="text-[10px] text-slate-400">Authentication enabled</p>
-            </div>
-
-            {/* Account Created Date */}
-            <div className="p-4.5 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Account Created Date
-              </p>
-              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                {formatDate(profile.createdAt)}
-              </p>
-              <p className="text-[10px] text-slate-400">Member since enrollment</p>
-            </div>
-          </div>
-
-          {/* Security Notice and Change Password */}
-          <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/80">
-            <div className="flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>Password and authorization secrets are strictly protected and never stored in plain text.</span>
-            </div>
             <button
               type="button"
               onClick={() => {
                 setPasswordError('');
                 setPasswordSuccess('');
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
                 setShowPasswordModal(true);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-emerald-600 dark:text-emerald-400 transition-colors w-fit cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold transition-colors shadow-xs shrink-0 cursor-pointer"
             >
-              <span>Change Password in Settings</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              <KeyRound className="w-4 h-4" />
+              <span>Change Password</span>
             </button>
           </div>
+
+          {/* Optional Security Information (Only displayed if supported by backend/profile) */}
+          {(profile.lastPasswordChanged || profile.passwordChangedAt || profile.lastLogin || profile.lastLoginDate) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+              {(profile.lastPasswordChanged || profile.passwordChangedAt) && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Last password changed</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
+                    {formatDate(profile.lastPasswordChanged || profile.passwordChangedAt)}
+                  </p>
+                </div>
+              )}
+              {(profile.lastLogin || profile.lastLoginDate) && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Last successful login</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
+                    {formatDate(profile.lastLogin || profile.lastLoginDate)}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </form>

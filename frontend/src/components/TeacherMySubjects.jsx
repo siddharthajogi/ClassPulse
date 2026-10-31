@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { teacherApi } from '../api';
 import TeacherDropdown from './TeacherDropdown';
+import { usePageRefresh } from '../context/RefreshContext';
 
 // Helper to format string fields safely with fallback to '—'
 const formatField = (val) => {
@@ -125,6 +126,9 @@ export default function TeacherMySubjects({ currentUser }) {
   useEffect(() => {
     fetchSubjects();
   }, [fetchSubjects]);
+
+  // Register with global header refresh button
+  usePageRefresh(() => fetchSubjects(true), [fetchSubjects]);
 
   // Extract dynamically available Teaching Year levels from actual assignments
   const availableTeachingYears = useMemo(() => {
@@ -337,7 +341,7 @@ export default function TeacherMySubjects({ currentUser }) {
             />
           </div>
 
-          {/* Right: Subject count badge and Refresh button */}
+          {/* Right: Subject count badge */}
           <div className="flex items-center gap-2.5 shrink-0 justify-between sm:justify-end">
             {/* Subject Count Badge */}
             <span
@@ -346,20 +350,6 @@ export default function TeacherMySubjects({ currentUser }) {
             >
               {filteredSubjects.length} {filteredSubjects.length === 1 ? 'Subject' : 'Subjects'}
             </span>
-
-            {/* Refresh Button */}
-            <button
-              id="teacher-subjects-refresh-btn"
-              data-testid="teacher-subjects-refresh-btn"
-              type="button"
-              onClick={() => fetchSubjects(true)}
-              disabled={refreshing}
-              className="inline-flex items-center justify-center gap-2 h-10 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-              title="Refresh subjects from database"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${refreshing ? 'animate-spin text-emerald-600 dark:text-emerald-400' : ''}`} />
-              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
           </div>
         </div>
       </div>

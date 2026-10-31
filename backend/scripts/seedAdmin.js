@@ -28,7 +28,13 @@ const seedAdmin = async () => {
 
     if (existingTargetAdmin) {
       console.log(`[Seed Info] Admin account "${adminId}" already exists in the database.`);
-      console.log('[Seed Info] Existing credentials and password state preserved. No changes made.');
+      console.log(`[Seed Sync] Synchronizing password with SEED_ADMIN_PASSWORD from .env...`);
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(adminPassword, saltRounds);
+      existingTargetAdmin.password = hashedPassword;
+      existingTargetAdmin.isActive = true;
+      await existingTargetAdmin.save();
+      console.log(`[Seed Success] Admin account "${adminId}" password updated successfully.`);
       await mongoose.disconnect();
       console.log('[Seed] Database connection closed.');
       process.exit(0);

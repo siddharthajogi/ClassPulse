@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { teacherApi } from '../api';
-import TeacherDropdown from './TeacherDropdown';
+import TeacherDropdown, { cleanSectionName, formatSectionLabel } from './TeacherDropdown';
+import { usePageRefresh } from '../context/RefreshContext';
 import {
   Users,
   Search,
@@ -21,13 +22,12 @@ import {
   FileText
 } from 'lucide-react';
 
-// Academic years of study in canonical order matching ClassPulse curriculum
-const ACADEMIC_YEARS = [
-  { value: 'all', label: 'All Years' },
-  { value: 'First Year', label: 'First Year' },
-  { value: 'Second Year', label: 'Second Year' },
-  { value: 'Third Year', label: 'Third Year' },
-  { value: 'Fourth Year', label: 'Fourth Year' },
+// Canonical order of academic years of study matching ClassPulse curriculum
+const CANONICAL_YEAR_ORDER = [
+  'First Year',
+  'Second Year',
+  'Third Year',
+  'Fourth Year',
 ];
 
 export default function TeacherStudents({ currentUser }) {
@@ -38,10 +38,10 @@ export default function TeacherStudents({ currentUser }) {
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState('');
 
-  // Three Dependent Filters:
-  // 1. Year: 'all' | 'First Year' | 'Second Year' | 'Third Year' | 'Fourth Year'
-  // 2. Department: 'all' | department name
-  // 3. Section: 'all' | class._id
+  // Three Dependent Dynamic Academic Filters:
+  // 1. Academic Year: available year | 'all'
+  // 2. Department: available department | 'all'
+  // 3. Section: class._id | 'all'
   const [yearFilter, setYearFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [sectionFilter, setSectionFilter] = useState('all');
@@ -51,12 +51,12 @@ export default function TeacherStudents({ currentUser }) {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState('');
 
-  // Search & Sorting & Pagination
+  // Search & Sorting & Fixed Sensible Pagination (15 per page)
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const PAGE_SIZE = 15;
 
   // View Profile Modal State (Read-Only)
   const [selectedStudentId, setSelectedStudentId] = useState(null);
@@ -106,7 +106,15 @@ export default function TeacherStudents({ currentUser }) {
       const params = {};
       if (yearFilter !== 'all') params.yearOfStudy = yearFilter;
       if (departmentFilter !== 'all') params.department = departmentFilter;
-      if (sectionFilter !== 'all') params.classId = sectionFilter;
+      if (sectionFilter !== 'all') {
+        params.section = cleanSectionName(sectionFilter);
+        const selectedSec = availableSections.find(s => s.value === sectionFilter || s.sectionCode === cleanSectionName(sectionFilter));
+        if (selectedSec && selectedSec.classIds && selectedSec.classIds.length > 0) {
+          params.classId = selectedSec.classIds.join(',');
+        } else {
+          params.classId = sectionFilter;
+        }
+      }
 
       const res = await teacherApi.getStudents(params);
       if (res && res.success) {
@@ -132,127 +140,135 @@ export default function TeacherStudents({ currentUser }) {
     }
   }, [loadingInitial, fetchStudents]);
 
-  // Dependent Options: Department dropdown options based on Year filter
-  const departmentDropdownOptions = useMemo(() => {
-    const list = [{ value: 'all', label: 'All Departments' }];
+  // Register with global header refresh button
+  usePageRefresh(async () => {
+    await Promise.all([fetchStudents(), loadTeacherClasses(true)]);
+  }, [fetchStudents, loadTeacherClasses]);
 
-    // Filter assigned classes by yearFilter
-    const classesForYear = yearFilter === 'all'
-      ? classes
-      : classes.filter(c => c.yearOfStudy === yearFilter);
+  // Filter assigned classes to only those containing enrolled students assigned to this teacher
+  const classesWithStudents = useMemo(() => {
+    const withCount = classes.filter(c => (c.studentCount || 0) > 0);
+    return withCount.length > 0 ? withCount : classes;
+  }, [classes]);
 
-    const seenDeptNames = new Set();
-    classesForYear.forEach(c => {
-      const deptName = c.department;
-      if (deptName && !seenDeptNames.has(deptName)) {
-        seenDeptNames.add(deptName);
-        const matched = departments.find(d => d.name === deptName || d.code === deptName);
-        list.push({
-          value: deptName,
-          label: matched?.code ? `${matched.code} — ${deptName}` : deptName
-        });
-      }
-    });
-
-    return list;
-  }, [classes, yearFilter, departments]);
-
-  // Format short, readable section name (e.g. "Section A", "Section B", "Section C")
-  const formatShortSectionName = (sec) => {
-    if (!sec) return 'Section';
-    const trimmed = String(sec).trim();
-    if (/^section\s+/i.test(trimmed)) return trimmed;
-    if (/^sec\.?\s+/i.test(trimmed)) {
-      return `Section ${trimmed.replace(/^sec\.?\s+/i, '')}`;
-    }
-    return `Section ${trimmed}`;
+  // Clean section label helper (e.g. "Section A", "Section B", "Section C")
+  // Uses shared formatSectionLabel to guarantee clean labels without redundant department or year names
+  const formatCleanSectionLabel = (sec) => {
+    return formatSectionLabel(sec);
   };
 
-  // Dependent Options: Section dropdown options with short, readable names ("Section A", "Section B", "Section C")
-  const sectionDropdownOptions = useMemo(() => {
-    const list = [{ value: 'all', label: 'All Sections' }];
+  // 1. Dynamic Academic Year Options: only years represented by assigned students
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set(classesWithStudents.map(c => c.yearOfStudy).filter(Boolean));
+    return CANONICAL_YEAR_ORDER.filter(y => yearsSet.has(y));
+  }, [classesWithStudents]);
 
-    let filtered = classes;
-    if (yearFilter !== 'all') {
-      filtered = filtered.filter(c => c.yearOfStudy === yearFilter);
-    }
-    if (departmentFilter !== 'all') {
-      filtered = filtered.filter(c => c.department?.toLowerCase() === departmentFilter.toLowerCase());
-    }
+  const yearDropdownOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'All Years' },
+      ...availableYears.map(y => ({ value: y, label: y }))
+    ];
+  }, [availableYears]);
 
-    // Sort sections alphabetically by section letter/name
-    const sorted = [...filtered].sort((a, b) => {
-      const secA = (a.section || '').replace(/^sec(tion)?\s*/i, '');
-      const secB = (b.section || '').replace(/^sec(tion)?\s*/i, '');
-      return secA.localeCompare(secB, undefined, { numeric: true, sensitivity: 'base' });
+  // 2. Dynamic Department Options: scoped to selected Academic Year
+  const classesForYear = useMemo(() => {
+    if (yearFilter === 'all') return classesWithStudents;
+    return classesWithStudents.filter(c => c.yearOfStudy === yearFilter);
+  }, [classesWithStudents, yearFilter]);
+
+  const availableDepartments = useMemo(() => {
+    const deptsSet = new Set(classesForYear.map(c => c.department).filter(Boolean));
+    return Array.from(deptsSet).sort();
+  }, [classesForYear]);
+
+  const departmentDropdownOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'All Departments' },
+      ...availableDepartments.map(d => ({ value: d, label: d }))
+    ];
+  }, [availableDepartments]);
+
+  // 3. Dynamic Section Options: scoped to selected Year & Department with clean labels
+  const classesForDept = useMemo(() => {
+    if (departmentFilter === 'all') return classesForYear;
+    return classesForYear.filter(c => c.department?.toLowerCase() === departmentFilter.toLowerCase());
+  }, [classesForYear, departmentFilter]);
+
+  const availableSections = useMemo(() => {
+    const sectionMap = new Map();
+
+    classesForDept.forEach(c => {
+      const cleanCode = cleanSectionName(c.section);
+      if (!cleanCode) return;
+      if (!sectionMap.has(cleanCode)) {
+        sectionMap.set(cleanCode, {
+          value: cleanCode,
+          sectionCode: cleanCode,
+          label: formatCleanSectionLabel(c.section),
+          classIds: [],
+          classes: []
+        });
+      }
+      const item = sectionMap.get(cleanCode);
+      item.classIds.push(String(c._id));
+      item.classes.push(c);
     });
 
-    // Check for collisions across multiple departments if All Departments is active
-    const labelCounts = {};
-    sorted.forEach(c => {
-      const short = formatShortSectionName(c.section);
-      labelCounts[short] = (labelCounts[short] || 0) + 1;
-    });
-
-    sorted.forEach(c => {
-      const baseShort = formatShortSectionName(c.section);
-      // When a specific department is chosen, always display cleanly "Section A", "Section B"
-      // If "All Departments" has duplicate section names across departments, append dept code for clarity
-      const label = (labelCounts[baseShort] > 1 && departmentFilter === 'all')
-        ? `${baseShort} (${c.department})`
-        : baseShort;
-
-      list.push({
-        value: c._id,
-        label
-      });
-    });
-
+    const list = Array.from(sectionMap.values());
+    list.sort((a, b) => a.sectionCode.localeCompare(b.sectionCode, undefined, { numeric: true, sensitivity: 'base' }));
     return list;
-  }, [classes, yearFilter, departmentFilter]);
+  }, [classesForDept]);
 
-  // Dependent Filter Cascading: Update year filter and reset downstream filters if invalid
+  const sectionDropdownOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'All Sections' },
+      ...availableSections.map(s => ({ value: s.value, label: s.label }))
+    ];
+  }, [availableSections]);
+
+  // Cascading Filter Updates: Update Year and cascade to Department and Section
   const handleYearChange = (newYear) => {
     setYearFilter(newYear);
 
-    // Compute remaining classes for new year
-    const classesForNewYear = newYear === 'all'
-      ? classes
-      : classes.filter(c => c.yearOfStudy === newYear);
+    // Compute valid departments for newYear
+    const poolForYear = newYear === 'all' ? classesWithStudents : classesWithStudents.filter(c => c.yearOfStudy === newYear);
+    const deptsSet = new Set(poolForYear.map(c => c.department).filter(Boolean));
+    const validDepts = Array.from(deptsSet);
 
-    const validDepts = new Set(classesForNewYear.map(c => c.department?.toLowerCase()));
+    // Clear dependent department selection only if it becomes invalid under newYear
     let nextDept = departmentFilter;
-    if (departmentFilter !== 'all' && !validDepts.has(departmentFilter.toLowerCase())) {
+    if (departmentFilter !== 'all' && !validDepts.some(d => d.toLowerCase() === departmentFilter.toLowerCase())) {
       nextDept = 'all';
       setDepartmentFilter('all');
     }
 
-    // Reset section filter if current section is not in new classes
-    if (sectionFilter !== 'all') {
-      const isSecValid = classesForNewYear.some(c =>
-        c._id.toString() === sectionFilter &&
-        (nextDept === 'all' || c.department?.toLowerCase() === nextDept.toLowerCase())
-      );
-      if (!isSecValid) {
-        setSectionFilter('all');
-      }
+    // Compute valid sections for newYear & nextDept
+    const poolForDept = nextDept === 'all' ? poolForYear : poolForYear.filter(c => c.department?.toLowerCase() === nextDept.toLowerCase());
+    const validSecCodes = Array.from(new Set(poolForDept.map(c => cleanSectionName(c.section)).filter(Boolean)));
+
+    // Clear dependent section selection only if it becomes invalid under newYear & nextDept
+    if (sectionFilter !== 'all' && !validSecCodes.includes(cleanSectionName(sectionFilter))) {
+      setSectionFilter('all');
     }
   };
 
-  // Dependent Filter Cascading: Update department filter and reset section filter if invalid
+  // Cascading Filter Updates: Update Department and cascade to Section
   const handleDepartmentChange = (newDept) => {
     setDepartmentFilter(newDept);
 
-    if (sectionFilter !== 'all') {
-      const isSecValid = classes.some(c =>
-        c._id.toString() === sectionFilter &&
-        (yearFilter === 'all' || c.yearOfStudy === yearFilter) &&
-        (newDept === 'all' || c.department?.toLowerCase() === newDept.toLowerCase())
-      );
-      if (!isSecValid) {
-        setSectionFilter('all');
-      }
+    // Compute valid sections for current yearFilter & newDept
+    const poolForYear = yearFilter === 'all' ? classesWithStudents : classesWithStudents.filter(c => c.yearOfStudy === yearFilter);
+    const poolForDept = newDept === 'all' ? poolForYear : poolForYear.filter(c => c.department?.toLowerCase() === newDept.toLowerCase());
+    const validSecCodes = Array.from(new Set(poolForDept.map(c => cleanSectionName(c.section)).filter(Boolean)));
+
+    // Clear dependent section selection only if it becomes invalid under newDept
+    if (sectionFilter !== 'all' && !validSecCodes.includes(cleanSectionName(sectionFilter))) {
+      setSectionFilter('all');
     }
+  };
+
+  const handleSectionChange = (newSec) => {
+    setSectionFilter(newSec);
   };
 
   // Client-side search and sorting on returned teacher-authorized students
@@ -306,12 +322,21 @@ export default function TeacherStudents({ currentUser }) {
     return result;
   }, [students, searchTerm, sortField, sortDirection]);
 
-  // Paginated students slice
-  const totalPages = Math.ceil(processedStudents.length / pageSize) || 1;
+  // Fixed sensible pagination (15 per page)
+  const totalPages = Math.ceil(processedStudents.length / PAGE_SIZE) || 1;
   const paginatedStudents = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return processedStudents.slice(startIndex, startIndex + pageSize);
-  }, [processedStudents, currentPage, pageSize]);
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return processedStudents.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [processedStudents, currentPage]);
+
+  // Clean student name helper removing artificial verification names
+  const getCleanStudentName = (student) => {
+    const name = student?.name || student?.personalInfo?.name || '—';
+    if (/verification student/i.test(name)) {
+      return name.replace(/verification student/i, 'Student').trim() || 'Student';
+    }
+    return name;
+  };
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -390,35 +415,9 @@ export default function TeacherStudents({ currentUser }) {
   }
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-16 transition-colors duration-200" data-testid="teacher-students-page">
-      {/* 2. Sub-Header: Duplicate 'Students' heading removed, content shifted upward */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-0.5">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
-            <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span>Assigned Students Directory</span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Directory of enrolled students across your assigned sections with attendance records and academic risk scores.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            fetchStudents();
-            loadTeacherClasses(true);
-          }}
-          disabled={refreshing || loadingStudents}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl text-xs sm:text-sm font-medium transition-all shadow-xs self-start sm:self-auto cursor-pointer disabled:opacity-60 shrink-0"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing || loadingStudents ? 'animate-spin text-emerald-600' : ''}`} />
-          <span>Refresh Records</span>
-        </button>
-      </div>
-
-      {/* 3. Three Dependent Filters & Search Bar */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-4.5 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 space-y-3">
+    <div className="space-y-3.5 max-w-7xl mx-auto pb-12 transition-colors duration-200" data-testid="teacher-students-page">
+      {/* 1. Dynamic Academic Filters & Search Bar */}
+      <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 space-y-3">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
           {/* Search Box */}
           <div className="relative flex-1 w-full">
@@ -449,23 +448,24 @@ export default function TeacherStudents({ currentUser }) {
             )}
           </div>
 
-          {/* Three Dependent Dropdowns: All Years -> All Departments -> All Sections */}
+          {/* Three Dependent Dropdowns in exact order: 1. Academic Year -> 2. Department -> 3. Section */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Filter 1: All Years */}
+            {/* Filter 1: Academic Year */}
             <TeacherDropdown
               id="teacher-students-year-filter"
               data-testid="teacher-students-year-filter"
               value={yearFilter}
               onChange={(e) => handleYearChange(e.target.value)}
-              options={ACADEMIC_YEARS}
+              options={yearDropdownOptions}
               placeholder="All Years"
-              title="Filter by Year"
+              title="Filter by Academic Year"
               icon={Calendar}
+              alwaysShowDefaultOption={true}
               className="w-full sm:w-auto min-w-[150px]"
               menuClassName="w-full sm:w-[190px]"
             />
 
-            {/* Filter 2: All Departments */}
+            {/* Filter 2: Department */}
             <TeacherDropdown
               id="teacher-students-dept-filter"
               data-testid="teacher-students-dept-filter"
@@ -475,68 +475,27 @@ export default function TeacherStudents({ currentUser }) {
               placeholder="All Departments"
               title="Filter by Department"
               icon={Building2}
+              alwaysShowDefaultOption={true}
               className="w-full sm:w-auto min-w-[185px]"
               menuClassName="w-full sm:w-[270px]"
             />
 
-            {/* Filter 3: All Sections (Short names: Section A, Section B, Section C) */}
+            {/* Filter 3: Section (Clean labels: Section A, Section B, Section C) */}
             <TeacherDropdown
               id="teacher-students-section-filter"
               data-testid="teacher-students-section-filter"
               value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value)}
+              onChange={(e) => handleSectionChange(e.target.value)}
               options={sectionDropdownOptions}
               placeholder="All Sections"
               title="Filter by Section"
               icon={Layers}
+              alwaysShowDefaultOption={true}
               className="w-full sm:w-auto min-w-[165px]"
-              menuClassName="w-full sm:w-[220px]"
+              menuClassName="w-full sm:w-[200px]"
             />
           </div>
         </div>
-
-        {/* Active Filter Chips & Clear */}
-        {(yearFilter !== 'all' || departmentFilter !== 'all' || sectionFilter !== 'all' || searchTerm) && (
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs flex-wrap">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Active filters:</span>
-            {yearFilter !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold">
-                <span>Year: {yearFilter}</span>
-                <X className="w-3 h-3 cursor-pointer" onClick={() => handleYearChange('all')} />
-              </span>
-            )}
-            {departmentFilter !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold">
-                <span>Dept: {departmentFilter}</span>
-                <X className="w-3 h-3 cursor-pointer" onClick={() => handleDepartmentChange('all')} />
-              </span>
-            )}
-            {sectionFilter !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold">
-                <span>Section filter active</span>
-                <X className="w-3 h-3 cursor-pointer" onClick={() => setSectionFilter('all')} />
-              </span>
-            )}
-            {searchTerm && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-semibold">
-                <span>Search: "{searchTerm}"</span>
-                <X className="w-3 h-3 cursor-pointer" onClick={() => setSearchTerm('')} />
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setYearFilter('all');
-                setDepartmentFilter('all');
-                setSectionFilter('all');
-                setSearchTerm('');
-              }}
-              className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-semibold ml-auto cursor-pointer"
-            >
-              Reset All Filters
-            </button>
-          </div>
-        )}
       </div>
 
       {/* 4. Student Directory Table */}
@@ -592,39 +551,7 @@ export default function TeacherStudents({ currentUser }) {
           </button>
         </div>
       ) : (
-        <div className="space-y-3.5">
-          {/* Table Header Summary & Rows-per-page */}
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
-            <span>
-              Showing <span className="font-semibold text-slate-800 dark:text-slate-200">{paginatedStudents.length}</span> of{' '}
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{processedStudents.length}</span> assigned students
-            </span>
-
-            <div className="flex items-center gap-2">
-              <span>Rows:</span>
-              <TeacherDropdown
-                id="students-table-pagesize"
-                data-testid="students-table-pagesize"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                options={[
-                  { value: 10, label: '10 per page' },
-                  { value: 25, label: '25 per page' },
-                  { value: 50, label: '50 per page' },
-                ]}
-                placeholder="10 per page"
-                title="Rows per page"
-                className="w-auto min-w-[120px]"
-                menuClassName="w-[130px]"
-                align="right"
-                autoWidth
-              />
-            </div>
-          </div>
-
+        <div className="space-y-3">
           {/* Directory Table — Exactly the 4 Required Columns + Profile Action */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
             <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap" data-testid="teacher-students-table">
@@ -730,7 +657,7 @@ export default function TeacherStudents({ currentUser }) {
                             {student.name ? student.name.charAt(0).toUpperCase() : 'S'}
                           </div>
                           <div>
-                            <span className="font-semibold">{student.name}</span>
+                            <span className="font-semibold">{getCleanStudentName(student)}</span>
                             <div className="text-xs text-slate-500 dark:text-slate-400 font-normal">
                               {student.department} · {student.yearOfStudy} · Sec {student.section}
                             </div>

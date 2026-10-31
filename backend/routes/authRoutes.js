@@ -122,8 +122,28 @@ router.post('/login', async (req, res) => {
           user = teacherProfile.user;
         }
       }
+    } else if (cleanRole === 'admin') {
+      // Admin account lookup: supports Admin ID (0001), email, or the standard 'admin' alias
+      const defaultAdminId = (process.env.SEED_ADMIN_ID || '0001').trim().toLowerCase();
+      user = await User.findOne({
+        role: 'admin',
+        $or: [
+          { userId: cleanId },
+          { email: cleanId },
+          ...(cleanId === 'admin' ? [{ userId: defaultAdminId }] : [])
+        ]
+      });
+
+      if (!user) {
+        user = await User.findOne({
+          $or: [
+            { userId: cleanId },
+            { email: cleanId }
+          ]
+        });
+      }
     } else {
-      // Student or Admin account lookup
+      // Student account lookup
       user = await User.findOne({
         $or: [
           { userId: cleanId },
@@ -224,7 +244,7 @@ router.post('/login', async (req, res) => {
     if (isDbError) {
       return res.status(503).json({
         success: false,
-        error: 'Database service is temporarily unavailable. Please try again in a few moments.'
+        error: `Database service is temporarily unavailable: ${error.message} (${error.name})`
       });
     }
 

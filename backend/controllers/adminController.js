@@ -2596,10 +2596,44 @@ exports.adminResetPassword = async (req, res) => {
     const { newPassword } = req.body;
 
     if (!newPassword || !validatePasswordStrength(newPassword)) {
-      return res.status(400).json({ success: false, error: 'Password does not meet strength requirements' });
+      return res.status(400).json({
+        success: false,
+        error: 'Password does not meet strength requirements (min 8 characters, at least 1 letter, and 1 number or special character)'
+      });
     }
 
-    const user = await User.findOne({ _id: id, institution: req.currentUser.institution._id });
+    const institutionId = req.currentUser.institution._id;
+    let user = null;
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      user = await User.findOne({ _id: id, institution: institutionId });
+      if (!user) {
+        // Try locating via TeacherProfile._id
+        const teacherProfile = await TeacherProfile.findOne({ _id: id, institution: institutionId });
+        if (teacherProfile && teacherProfile.user) {
+          user = await User.findOne({ _id: teacherProfile.user, institution: institutionId });
+        }
+      }
+      if (!user) {
+        // Try locating via StudentProfile._id
+        const studentProfile = await StudentProfile.findOne({ _id: id, institution: institutionId });
+        if (studentProfile && studentProfile.user) {
+          user = await User.findOne({ _id: studentProfile.user, institution: institutionId });
+        }
+      }
+    }
+
+    if (!user) {
+      // Try finding by userId or teacherId
+      user = await User.findOne({ userId: id, institution: institutionId });
+      if (!user) {
+        const teacherProfile = await TeacherProfile.findOne({ teacherId: id, institution: institutionId });
+        if (teacherProfile && teacherProfile.user) {
+          user = await User.findOne({ _id: teacherProfile.user, institution: institutionId });
+        }
+      }
+    }
+
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     if (user.role === 'admin') {

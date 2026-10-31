@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { adminApi } from '../api';
-import { Loader2, Search, ShieldAlert, Pencil, X, AlertCircle, CheckCircle2, Trash2, AlertTriangle } from 'lucide-react';
+import { usePageRefresh } from '../context/RefreshContext';
+import { Loader2, Search, ShieldAlert, Pencil, X, AlertCircle, CheckCircle2, Trash2, AlertTriangle, KeyRound, Eye, EyeOff } from 'lucide-react';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import QualificationMultiSelect from './QualificationMultiSelect';
 
@@ -25,6 +26,16 @@ export default function TeacherList() {
   const [teacherDependencies, setTeacherDependencies] = useState(null);
   const [resolutionMode, setResolutionMode] = useState('unassign'); // 'unassign' | 'reassign'
   const [selectedReassignTeacherId, setSelectedReassignTeacherId] = useState('');
+
+  // Reset Password Modal State
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [teacherToReset, setTeacherToReset] = useState(null);
+  const [newTempPassword, setNewTempPassword] = useState('');
+  const [confirmTempPassword, setConfirmTempPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState('');
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState('');
 
   // Edit Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -79,6 +90,12 @@ export default function TeacherList() {
       setLoadingDepts(false);
     }
   };
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchTeachers(), fetchDepartmentsList()]);
+  }, []);
+
+  usePageRefresh(refreshAll);
 
   useEffect(() => {
     fetchTeachers();
@@ -320,14 +337,63 @@ export default function TeacherList() {
     }
   };
 
-  const resetPassword = async (teacher) => {
-    const newPassword = prompt(`Enter new temporary password for ${teacher.teacherId} (Min 8 chars, 1 letter, 1 number/symbol):`);
-    if (!newPassword) return;
+  const openResetPasswordModal = (teacher) => {
+    setTeacherToReset(teacher);
+    setNewTempPassword('');
+    setConfirmTempPassword('');
+    setShowPassword(false);
+    setResetPasswordError('');
+    setResetPasswordSuccess('');
+    setResetModalOpen(true);
+  };
+
+  const closeResetPasswordModal = () => {
+    if (resettingPassword) return;
+    setResetModalOpen(false);
+    setTeacherToReset(null);
+    setNewTempPassword('');
+    setConfirmTempPassword('');
+    setResetPasswordError('');
+    setResetPasswordSuccess('');
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setResetPasswordError('');
+    setResetPasswordSuccess('');
+
+    if (!newTempPassword) {
+      setResetPasswordError('Please enter a new temporary password.');
+      return;
+    }
+    if (newTempPassword.length < 8) {
+      setResetPasswordError('Password must be at least 8 characters long.');
+      return;
+    }
+    const hasLetter = /[a-zA-Z]/.test(newTempPassword);
+    const hasNumberOrSymbol = /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newTempPassword);
+    if (!hasLetter || !hasNumberOrSymbol) {
+      setResetPasswordError('Password must contain at least one letter and at least one number or special character.');
+      return;
+    }
+    if (newTempPassword !== confirmTempPassword) {
+      setResetPasswordError('Passwords do not match.');
+      return;
+    }
+
     try {
-      await adminApi.resetUserPassword(teacher.user._id, newPassword);
-      alert('Password reset successfully. User must change it on next login.');
+      setResettingPassword(true);
+      const targetId = teacherToReset.user?._id || teacherToReset.user || teacherToReset._id || teacherToReset.teacherId;
+      await adminApi.resetUserPassword(targetId, newTempPassword);
+      setResetPasswordSuccess(`Password successfully reset for ${teacherToReset.user?.name || teacherToReset.personalInfo?.name || teacherToReset.teacherId}. They will be required to change it on next login.`);
+      setTimeout(() => {
+        closeResetPasswordModal();
+        fetchTeachers();
+      }, 1600);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to reset password');
+      setResetPasswordError(err.response?.data?.error || 'Failed to reset password');
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -500,8 +566,9 @@ export default function TeacherList() {
                     {t.user?.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                   <button
-                    onClick={() => resetPassword(t)}
+                    onClick={() => openResetPasswordModal(t)}
                     className="text-sm text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer"
+                    title="Reset Teacher Password"
                   >
                     <ShieldAlert className="w-4 h-4" /> Reset Pwd
                   </button>
@@ -1014,6 +1081,152 @@ export default function TeacherList() {
           </div>
         )}
       </DeleteConfirmationModal>
+
+      {/* Reset Teacher Password Modal */}
+      {resetModalOpen && teacherToReset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-150 text-slate-900 dark:text-slate-100">
+            <div className="flex items-start justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-900/40">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Reset Faculty Password</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {teacherToReset.user?.name || teacherToReset.personalInfo?.name || 'Faculty Member'} &bull; <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{teacherToReset.teacherId}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeResetPasswordModal}
+                disabled={resettingPassword}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPasswordSubmit} className="mt-4 space-y-4">
+              {/* Security policy notice */}
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <span className="font-semibold block">Required Password Change</span>
+                  The teacher will be forced to set a new password upon their very next login. All active sessions will be immediately invalidated.
+                </div>
+              </div>
+
+              {resetPasswordError && (
+                <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{resetPasswordError}</span>
+                </div>
+              )}
+
+              {resetPasswordSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{resetPasswordSuccess}</span>
+                </div>
+              )}
+
+              {/* New Password Input */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  New Temporary Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={newTempPassword}
+                    onChange={(e) => setNewTempPassword(e.target.value)}
+                    placeholder="Enter temporary password"
+                    className="w-full px-3 py-2 pr-10 text-sm border rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-700 font-mono"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password Input */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Confirm Temporary Password <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmTempPassword}
+                  onChange={(e) => setConfirmTempPassword(e.target.value)}
+                  placeholder="Re-enter temporary password"
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-700 font-mono"
+                />
+              </div>
+
+              {/* Password strength checklist */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs space-y-1.5">
+                <p className="font-semibold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider mb-1">
+                  Password Requirements:
+                </p>
+                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                  <span className={`flex items-center gap-1.5 ${newTempPassword.length >= 8 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${newTempPassword.length >= 8 ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    At least 8 characters
+                  </span>
+                  <span className={`flex items-center gap-1.5 ${/[a-zA-Z]/.test(newTempPassword) ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${/[a-zA-Z]/.test(newTempPassword) ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    At least 1 letter
+                  </span>
+                  <span className={`flex items-center gap-1.5 ${/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newTempPassword) ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newTempPassword) ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    1 number or symbol
+                  </span>
+                  <span className={`flex items-center gap-1.5 ${newTempPassword && newTempPassword === confirmTempPassword ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${newTempPassword && newTempPassword === confirmTempPassword ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    Passwords match
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-2 flex justify-end items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closeResetPasswordModal}
+                  disabled={resettingPassword}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resettingPassword || !!resetPasswordSuccess}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                >
+                  {resettingPassword ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Resetting Password...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-3.5 h-3.5" />
+                      Reset Password
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

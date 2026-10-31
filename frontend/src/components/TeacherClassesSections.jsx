@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teacherApi } from '../api';
 import TeacherDropdown from './TeacherDropdown';
+import { usePageRefresh } from '../context/RefreshContext';
 import {
   BookOpen,
   Users,
@@ -81,6 +82,9 @@ export default function TeacherClassesSections({ currentUser }) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Register with global header refresh button
+  usePageRefresh(() => loadData(true), [loadData]);
 
   // Helper to resolve department display code and name
   const getDeptInfo = useCallback((deptString) => {

@@ -25,6 +25,7 @@ import {
   Upload
 } from 'lucide-react';
 import { adminApi, authApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import { QUALIFICATION_OPTIONS, STANDARD_QUALIFICATIONS } from '../config/qualifications';
 
 // Helper to generate initials from full name or user ID
@@ -133,6 +134,8 @@ export default function AdminProfile() {
       setLoading(false);
     }
   };
+
+  usePageRefresh(loadProfileData);
 
   useEffect(() => {
     loadProfileData();

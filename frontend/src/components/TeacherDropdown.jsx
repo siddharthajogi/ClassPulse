@@ -32,6 +32,7 @@ export default function TeacherDropdown({
   align = 'left',
   'data-testid': dataTestId,
   autoWidth = false,
+  alwaysShowDefaultOption = true,
 }) {
   const generatedId = useId();
   const id = explicitId || generatedId;
@@ -106,11 +107,14 @@ export default function TeacherDropdown({
   // When a specific filter value is selected, include the default option at the top so users
   // can clearly reset the filter.
   const visibleOptions = React.useMemo(() => {
+    if (alwaysShowDefaultOption) {
+      return normalizedOptions;
+    }
     if (isDefaultSelected) {
       return normalizedOptions.filter((opt) => !opt.isDefault);
     }
     return normalizedOptions;
-  }, [normalizedOptions, isDefaultSelected]);
+  }, [normalizedOptions, isDefaultSelected, alwaysShowDefaultOption]);
 
   // Find currently selected option across all normalized options (for display text resolution)
   const selectedOption = normalizedOptions.find((opt) => String(opt.value) === String(value));
@@ -478,5 +482,46 @@ export default function TeacherDropdown({
       )}
     </div>
   );
+}
+
+/**
+ * Shared section name cleaner that extracts the core section identifier (e.g. "A", "B", "1").
+ * Removes:
+ * - Parenthetical department/course info: "(Computer Science and Engineering)"
+ * - Degree / Department prefixes: "CSE - ", "B.Tech - ", "CSE:"
+ * - Redundant "Section" or "Sec" prefixes: "Section A", "Sec. B"
+ */
+export function cleanSectionName(raw) {
+  if (!raw) return '';
+  let str = String(raw).trim();
+  // Check for explicit "Sec(tion) <letter/number>" pattern anywhere (e.g. inside parentheses or at end)
+  const secMatch = str.match(/\b(?:section|sec)\.?\s*([A-Za-z0-9]+)\b/i);
+  if (secMatch) {
+    return secMatch[1].toUpperCase();
+  }
+  // Otherwise strip parenthetical text e.g. "(Computer Science and Engineering)"
+  str = str.replace(/\([^)]*\)/g, '').trim();
+  if (str.includes(' - ')) {
+    const parts = str.split(' - ');
+    str = parts[parts.length - 1].trim();
+  }
+  if (str.includes(':')) {
+    const parts = str.split(':');
+    str = parts[parts.length - 1].trim();
+  }
+  str = str.replace(/^(CSE|ECE|EEE|MECH|CIVIL|IT|CS|B\.?Tech|M\.?Tech|MBA|MCA)\s*[-:]?\s*/i, '').trim();
+  str = str.replace(/^(section|sec)\.?\s*[-:]?\s*/i, '').trim();
+  return str.toUpperCase();
+}
+
+/**
+ * Shared section display label formatter for teacher dropdowns.
+ * Formats clean, simple labels: "Section A", "Section B", "Section C".
+ * Ensures department names, course names, and degree prefixes are completely removed.
+ */
+export function formatSectionLabel(rawSection) {
+  const clean = cleanSectionName(rawSection);
+  if (!clean) return 'Section';
+  return `Section ${clean}`;
 }
 

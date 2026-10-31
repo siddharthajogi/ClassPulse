@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import { Loader2, Search, MoreVertical, ShieldAlert, X, Trash2, CheckCircle2 } from 'lucide-react';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 
@@ -80,6 +81,8 @@ export default function StudentList() {
       setLoading(false);
     }
   };
+
+  usePageRefresh(fetchData);
 
   useEffect(() => {
     fetchData();

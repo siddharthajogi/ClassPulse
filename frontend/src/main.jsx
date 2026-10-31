@@ -4,12 +4,15 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { ThemeProvider } from './context/ThemeContext'
+import { RefreshProvider } from './context/RefreshContext'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <ThemeProvider>
-        <App />
+        <RefreshProvider>
+          <App />
+        </RefreshProvider>
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,

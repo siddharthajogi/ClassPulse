@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { teacherApi } from '../api';
 import { useTheme } from '../context/ThemeContext';
+import { usePageRefresh } from '../context/RefreshContext';
 
 export default function TeacherDashboardOverview({ currentUser }) {
   const { isDark } = useTheme();
@@ -57,6 +58,9 @@ export default function TeacherDashboardOverview({ currentUser }) {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Register with global header refresh button
+  usePageRefresh(fetchDashboardData, [fetchDashboardData]);
 
   useEffect(() => {
     setLogoLoadError(false);

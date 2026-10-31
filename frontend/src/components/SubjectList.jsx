@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import { Loader2, Search, Plus, X, Trash2, CheckCircle2 } from 'lucide-react';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 
@@ -80,6 +81,8 @@ export default function SubjectList() {
       setLoading(false);
     }
   };
+
+  usePageRefresh(fetchInitialData);
 
   useEffect(() => {
     fetchInitialData();

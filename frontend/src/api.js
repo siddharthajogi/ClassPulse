@@ -153,6 +153,10 @@ export const adminApi = {
     const response = await api.post(`/admin/users/${id}/reset-password`, { newPassword });
     return response.data;
   },
+  resetTeacherPassword: async (id, newPassword) => {
+    const response = await api.post(`/admin/teachers/${id}/reset-password`, { newPassword });
+    return response.data;
+  },
   getInstitutionSetupStatus: async () => {
     const response = await api.get('/admin/institution/status');
     return response.data;
@@ -330,8 +334,87 @@ export const teacherApi = {
   recordStudentAttendance: async (studentId, data) => {
     const response = await api.post(`/teacher/students/${studentId}/record`, data);
     return response.data;
+  },
+  getKnowledgeGapFilters: async () => {
+    const response = await api.get('/teacher/knowledge-gaps/filters');
+    return response.data;
+  },
+  getKnowledgeGapConcepts: async (params = {}) => {
+    const response = await api.get('/teacher/knowledge-gaps/concepts', { params });
+    return response.data;
+  },
+  createKnowledgeGapConcept: async (conceptData) => {
+    const response = await api.post('/teacher/knowledge-gaps/concepts', conceptData);
+    return response.data;
+  },
+  updateKnowledgeGapConcept: async (id, conceptData) => {
+    const response = await api.put(`/teacher/knowledge-gaps/concepts/${id}`, conceptData);
+    return response.data;
+  },
+  deleteKnowledgeGapConcept: async (id) => {
+    const response = await api.delete(`/teacher/knowledge-gaps/concepts/${id}`);
+    return response.data;
+  },
+  // Stage 2: Assessment Question to Concept Mapping API
+  getKnowledgeGapAssessments: async (params = {}) => {
+    const response = await api.get('/teacher/knowledge-gaps/assessments', { params });
+    return response.data;
+  },
+  getKnowledgeGapAssessmentDetails: async (id) => {
+    const response = await api.get(`/teacher/knowledge-gaps/assessments/${id}`);
+    return response.data;
+  },
+  createKnowledgeGapAssessment: async (assessmentData) => {
+    const response = await api.post('/teacher/knowledge-gaps/assessments', assessmentData);
+    return response.data;
+  },
+  updateQuestionMapping: async (assessmentId, questionId, mappingData) => {
+    const response = await api.put(
+      `/teacher/knowledge-gaps/assessments/${assessmentId}/questions/${questionId}/mapping`,
+      mappingData
+    );
+    return response.data;
+  },
+  saveAssessmentQuestions: async (assessmentId, questionsData) => {
+    const response = await api.put(
+      `/teacher/knowledge-gaps/assessments/${assessmentId}/questions`,
+      questionsData
+    );
+    return response.data;
+  },
+  deleteKnowledgeGapAssessment: async (assessmentId) => {
+    const response = await api.delete(`/teacher/knowledge-gaps/assessments/${assessmentId}`);
+    return response.data;
+  },
+  getKnowledgeGapAssessmentScores: async (assessmentId) => {
+    const response = await api.get(`/teacher/knowledge-gaps/assessments/${assessmentId}/scores`);
+    return response.data;
+  },
+  recordKnowledgeGapAssessmentScores: async (assessmentId, scoresData) => {
+    const response = await api.post(
+      `/teacher/knowledge-gaps/assessments/${assessmentId}/scores`,
+      scoresData
+    );
+    return response.data;
+  },
+  // Stage 3: Evidence-Based Knowledge-Gap Diagnosis API
+  getKnowledgeGapDiagnosis: async (params = {}) => {
+    const response = await api.get('/teacher/knowledge-gaps/diagnosis', { params });
+    return response.data;
+  },
+  getKnowledgeGapStudentConceptDetail: async (studentId, conceptId, params = {}) => {
+    const response = await api.get(
+      `/teacher/knowledge-gaps/diagnosis/students/${studentId}/concepts/${conceptId}`,
+      { params }
+    );
+    return response.data;
+  },
+  saveKnowledgeGapFollowUpNote: async (data) => {
+    const response = await api.post('/teacher/knowledge-gaps/diagnosis/follow-up', data);
+    return response.data;
   }
 };
 
 export default api;
+
 

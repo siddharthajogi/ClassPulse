@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 import {
   BookOpen,
   Users,
@@ -233,6 +234,8 @@ export default function ClassesSections() {
       setLoading(false);
     }
   };
+
+  usePageRefresh(loadData);
 
   useEffect(() => {
     loadData();
@@ -1006,27 +1009,17 @@ export default function ClassesSections() {
 
       {/* Overview Metrics & Controls */}
       <div>
-        <div className="flex items-center justify-end gap-2.5 mb-3">
-          {summaryFilter !== 'all' && (
+        {summaryFilter !== 'all' && (
+          <div className="flex items-center justify-start gap-2.5 mb-3">
             <button
               onClick={() => setSummaryFilter('all')}
               type="button"
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer mr-auto"
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
             >
               Reset Card Filter
             </button>
-          )}
-          <button
-            onClick={loadData}
-            disabled={loading}
-            type="button"
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            title="Refresh academic hierarchy"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>Refresh</span>
-          </button>
-        </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           {/* Card 1: Total Groups */}

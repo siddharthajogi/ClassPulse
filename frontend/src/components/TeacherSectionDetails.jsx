@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { teacherApi } from '../api';
 import TeacherDropdown from './TeacherDropdown';
+import { usePageRefresh } from '../context/RefreshContext';
 import {
   ArrowLeft,
   Building2,
@@ -71,6 +72,9 @@ export default function TeacherSectionDetails({ currentUser }) {
   useEffect(() => {
     fetchSectionDetails();
   }, [fetchSectionDetails]);
+
+  // Register with global header refresh button
+  usePageRefresh(() => fetchSectionDetails(true), [fetchSectionDetails]);
 
   // Reset pagination when search query changes
   useEffect(() => {
@@ -204,17 +208,6 @@ export default function TeacherSectionDetails({ currentUser }) {
             <span className="text-slate-700 dark:text-slate-300 font-semibold">{sectionName}</span>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => fetchSectionDetails(true)}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold shadow-2xs transition-colors self-start sm:self-auto cursor-pointer disabled:opacity-60"
-          title="Refresh section details"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'Refreshing...' : 'Refresh Data'}</span>
-        </button>
       </div>
 
       {/* ============================================================== */}

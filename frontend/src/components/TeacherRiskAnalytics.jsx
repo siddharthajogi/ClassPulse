@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { teacherApi } from '../api';
-import TeacherDropdown from './TeacherDropdown';
+import TeacherDropdown, { formatSectionLabel, cleanSectionName } from './TeacherDropdown';
+import { usePageRefresh } from '../context/RefreshContext';
 import {
   Activity,
   AlertTriangle,
@@ -113,16 +114,8 @@ export function RiskBadge({ level, score, showScore = true }) {
   );
 }
 
-// Format short readable section name (e.g. "Section A")
-const formatShortSectionName = (sec) => {
-  if (!sec) return 'Section';
-  const trimmed = String(sec).trim();
-  if (/^section\s+/i.test(trimmed)) return trimmed;
-  if (/^sec\.?\s+/i.test(trimmed)) {
-    return `Section ${trimmed.replace(/^sec\.?\s+/i, '')}`;
-  }
-  return `Section ${trimmed}`;
-};
+// Legacy alias pointing to shared formatSectionLabel
+const formatShortSectionName = formatSectionLabel;
 
 export default function TeacherRiskAnalytics({ currentUser }) {
   // Master analytics response state
@@ -162,7 +155,23 @@ export default function TeacherRiskAnalytics({ currentUser }) {
       const params = {};
       if (yearFilter !== 'all') params.yearOfStudy = yearFilter;
       if (departmentFilter !== 'all') params.department = departmentFilter;
-      if (sectionFilter !== 'all') params.classId = sectionFilter;
+      if (sectionFilter !== 'all') {
+        params.section = cleanSectionName(sectionFilter);
+        const matchingClassIds = (filterOptions.sections || [])
+          .filter(s => {
+            const yrMatch = yearFilter === 'all' || s.yearOfStudy === yearFilter;
+            const deptMatch = departmentFilter === 'all' || s.department?.toLowerCase() === departmentFilter.toLowerCase();
+            const subjMatch = subjectFilter === 'all' || (Array.isArray(s.subjectIds) && s.subjectIds.includes(subjectFilter));
+            const secMatch = cleanSectionName(s.section || s.name) === cleanSectionName(sectionFilter) || s._id === sectionFilter;
+            return yrMatch && deptMatch && subjMatch && secMatch;
+          })
+          .map(s => String(s._id));
+        if (matchingClassIds.length > 0) {
+          params.classId = matchingClassIds.join(',');
+        } else {
+          params.classId = sectionFilter;
+        }
+      }
       if (subjectFilter !== 'all') params.subjectId = subjectFilter;
       if (riskCategoryFilter !== 'all') params.riskLevel = riskCategoryFilter;
 
@@ -189,6 +198,9 @@ export default function TeacherRiskAnalytics({ currentUser }) {
     loadRiskAnalytics();
   }, [loadRiskAnalytics]);
 
+  // Register with global header refresh button
+  usePageRefresh(() => loadRiskAnalytics(true), [loadRiskAnalytics]);
+
   // Derived filter options from backend response
   const filterOptions = analyticsData?.filterOptions || {};
 
@@ -202,7 +214,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
     return list;
   }, [filterOptions.departments]);
 
-  // Section dropdown options based on Year & Dept filters
+  // Section dropdown options dynamically generated from actual database records and scoped by Year, Dept, Subject
   const sectionDropdownOptions = useMemo(() => {
     const list = [{ value: 'all', label: 'All Sections' }];
     const secs = filterOptions.sections || [];
@@ -214,46 +226,77 @@ export default function TeacherRiskAnalytics({ currentUser }) {
     if (departmentFilter !== 'all') {
       filtered = filtered.filter(s => s.department?.toLowerCase() === departmentFilter.toLowerCase());
     }
+    if (subjectFilter !== 'all') {
+      filtered = filtered.filter(s => Array.isArray(s.subjectIds) && s.subjectIds.includes(subjectFilter));
+    }
 
-    // Sort alphabetically
-    filtered.sort((a, b) => (a.section || '').localeCompare(b.section || ''));
-
+    // Group by clean section name to eliminate duplicates across classes/years/semesters
+    const sectionMap = new Map();
     filtered.forEach(s => {
-      const shortName = formatShortSectionName(s.section);
-      const label = departmentFilter === 'all' && s.department
-        ? `${shortName} (${s.department})`
-        : shortName;
+      const cleanCode = cleanSectionName(s.section || s.name || '');
+      if (!cleanCode) return;
+      if (!sectionMap.has(cleanCode)) {
+        sectionMap.set(cleanCode, {
+          value: cleanCode,
+          label: formatSectionLabel(s.section || s.name),
+          classIds: []
+        });
+      }
+      sectionMap.get(cleanCode).classIds.push(String(s._id));
+    });
+
+    const uniqueSections = Array.from(sectionMap.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' })
+    );
+
+    uniqueSections.forEach(s => {
       list.push({
-        value: s._id,
-        label
+        value: s.value,
+        label: s.label
       });
     });
 
     return list;
-  }, [filterOptions.sections, yearFilter, departmentFilter]);
+  }, [filterOptions.sections, yearFilter, departmentFilter, subjectFilter]);
 
   // Subject dropdown options
   const subjectDropdownOptions = useMemo(() => {
     const list = [{ value: 'all', label: 'All Assigned Subjects' }];
     const subjs = filterOptions.subjects || [];
-    subjs.forEach(s => {
+    let filtered = subjs;
+    if (departmentFilter !== 'all') {
+      filtered = filtered.filter(s => !s.department || s.department.toLowerCase() === departmentFilter.toLowerCase());
+    }
+    filtered.forEach(s => {
       list.push({
         value: s._id,
         label: s.label || s.name
       });
     });
     return list;
-  }, [filterOptions.subjects]);
+  }, [filterOptions.subjects, departmentFilter]);
+
+  // Helper to validate whether a section is still valid under new filter values
+  const isSectionValid = (secId, year, dept, subj) => {
+    if (secId === 'all') return true;
+    const cleanSecId = cleanSectionName(secId);
+    return (filterOptions.sections || []).some(s => {
+      const yrMatch = year === 'all' || s.yearOfStudy === year;
+      const deptMatch = dept === 'all' || s.department?.toLowerCase() === dept.toLowerCase();
+      const subjMatch = subj === 'all' || (Array.isArray(s.subjectIds) && s.subjectIds.includes(subj));
+      const cleanClassSec = cleanSectionName(s.section || s.name || '');
+      const secMatch = s._id === secId || cleanClassSec === cleanSecId;
+      return secMatch && yrMatch && deptMatch && subjMatch;
+    });
+  };
 
   // Cascading Filter Handlers
   const handleYearChange = (newYear) => {
     setYearFilter(newYear);
-    // Validate downstream section
     if (sectionFilter !== 'all') {
-      const valid = (filterOptions.sections || []).some(
-        s => s._id === sectionFilter && (newYear === 'all' || s.yearOfStudy === newYear)
-      );
-      if (!valid) setSectionFilter('all');
+      if (!isSectionValid(sectionFilter, newYear, departmentFilter, subjectFilter)) {
+        setSectionFilter('all');
+      }
     }
     setCurrentPage(1);
   };
@@ -261,10 +304,36 @@ export default function TeacherRiskAnalytics({ currentUser }) {
   const handleDepartmentChange = (newDept) => {
     setDepartmentFilter(newDept);
     if (sectionFilter !== 'all') {
-      const valid = (filterOptions.sections || []).some(
-        s => s._id === sectionFilter && (newDept === 'all' || s.department?.toLowerCase() === newDept.toLowerCase())
-      );
-      if (!valid) setSectionFilter('all');
+      if (!isSectionValid(sectionFilter, yearFilter, newDept, subjectFilter)) {
+        setSectionFilter('all');
+      }
+    }
+    setCurrentPage(1);
+  };
+
+  const handleSubjectChange = (newSubj) => {
+    setSubjectFilter(newSubj);
+    if (sectionFilter !== 'all') {
+      if (!isSectionValid(sectionFilter, yearFilter, departmentFilter, newSubj)) {
+        setSectionFilter('all');
+      }
+    }
+    setCurrentPage(1);
+  };
+
+  const handleSectionChange = (newSec) => {
+    setSectionFilter(newSec);
+    if (newSec !== 'all' && subjectFilter !== 'all') {
+      const cleanNewSec = cleanSectionName(newSec);
+      const subj = (filterOptions.subjects || []).find(s => s._id === subjectFilter);
+      if (subj && subj.classIds && subj.classIds.length > 0) {
+        const matchesSection = (filterOptions.sections || []).some(sec => 
+          subj.classIds.includes(String(sec._id)) && (cleanSectionName(sec.section || sec.name) === cleanNewSec || sec._id === newSec)
+        );
+        if (!matchesSection) {
+          setSubjectFilter('all');
+        }
+      }
     }
     setCurrentPage(1);
   };
@@ -446,16 +515,6 @@ export default function TeacherRiskAnalytics({ currentUser }) {
             Real-time dropout risk detection, attendance patterns, and explainable intervention radar adapted from EduRiskMonitor.
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => loadRiskAnalytics(true)}
-          disabled={refreshing || loading}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl text-xs sm:text-sm font-medium transition-all shadow-xs self-start sm:self-auto cursor-pointer disabled:opacity-60 shrink-0"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing || loading ? 'animate-spin text-emerald-600' : ''}`} />
-          <span>Refresh Analytics</span>
-        </button>
       </div>
 
       {/* 2. Interactive Filter Scope Bar */}
@@ -525,7 +584,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
               id="risk-filter-section"
               data-testid="risk-filter-section"
               value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value)}
+              onChange={(e) => handleSectionChange(e.target.value)}
               options={sectionDropdownOptions}
               placeholder="All Sections"
               title="Filter by Section"
@@ -539,7 +598,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
               id="risk-filter-subject"
               data-testid="risk-filter-subject"
               value={subjectFilter}
-              onChange={(e) => setSubjectFilter(e.target.value)}
+              onChange={(e) => handleSubjectChange(e.target.value)}
               options={subjectDropdownOptions}
               placeholder="All Subjects"
               title="Filter by Subject"
@@ -582,7 +641,7 @@ export default function TeacherRiskAnalytics({ currentUser }) {
             )}
             {sectionFilter !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold">
-                <span>Section active</span>
+                <span>Section: {cleanSectionName(sectionFilter)}</span>
                 <X className="w-3 h-3 cursor-pointer" onClick={() => setSectionFilter('all')} />
               </span>
             )}

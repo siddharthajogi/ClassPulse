@@ -538,7 +538,30 @@ const normalizeYearOfStudy = (yearOfStudy, semester) => {
       if (num === 7 || num === 8) return 'Fourth Year';
     }
   }
-  return 'First Year';
+};
+
+/**
+ * Helper to clean section name (e.g. "Section A", "Sec. B", "CSE - A" -> "A")
+ */
+const cleanSectionName = (raw) => {
+  if (!raw) return '';
+  let str = String(raw).trim();
+  const secMatch = str.match(/\b(?:section|sec)\.?\s*([A-Za-z0-9]+)\b/i);
+  if (secMatch) {
+    return secMatch[1].toUpperCase();
+  }
+  str = str.replace(/\([^)]*\)/g, '').trim();
+  if (str.includes(' - ')) {
+    const parts = str.split(' - ');
+    str = parts[parts.length - 1].trim();
+  }
+  if (str.includes(':')) {
+    const parts = str.split(':');
+    str = parts[parts.length - 1].trim();
+  }
+  str = str.replace(/^(CSE|ECE|EEE|MECH|CIVIL|IT|CS|B\.?Tech|M\.?Tech|MBA|MCA)\s*[-:]?\s*/i, '').trim();
+  str = str.replace(/^(section|sec)\.?\s*[-:]?\s*/i, '').trim();
+  return str.toUpperCase();
 };
 
 /**
@@ -929,16 +952,41 @@ exports.getTeacherProfile = async (req, res) => {
       departments = await Department.find({ institution: institutionId, isActive: true }).sort({ name: 1 });
     }
 
-    const { QUALIFICATION_OPTIONS } = require('../config/qualifications');
+    const { QUALIFICATION_OPTIONS, TEACHER_QUALIFICATION_OPTIONS } = require('../config/qualifications');
 
     const qual = teacherProfile?.professionalInfo?.highestQualification ||
       user.highestQualification ||
       (Array.isArray(teacherProfile?.professionalInfo?.qualifications) && teacherProfile.professionalInfo.qualifications[0]) ||
       (Array.isArray(user.qualifications) && user.qualifications[0]) || '';
 
-    const qualificationsList = (Array.isArray(teacherProfile?.professionalInfo?.qualifications) && teacherProfile.professionalInfo.qualifications.length > 0)
-      ? teacherProfile.professionalInfo.qualifications
-      : (Array.isArray(user.qualifications) ? user.qualifications : []);
+    let qualificationsList = [];
+    if (Array.isArray(teacherProfile?.professionalInfo?.qualifications) && teacherProfile.professionalInfo.qualifications.length > 0) {
+      qualificationsList = teacherProfile.professionalInfo.qualifications;
+    } else if (Array.isArray(user.qualifications) && user.qualifications.length > 0) {
+      qualificationsList = user.qualifications;
+    } else if (qual) {
+      if (qual.includes(',')) {
+        qualificationsList = qual.split(',').map(s => s.trim()).filter(Boolean);
+      } else {
+        qualificationsList = [qual.trim()];
+      }
+    }
+
+    // Migrate legacy combined qualifications (e.g. 'B.Tech / B.E.' -> 'B.Tech', 'B.E.')
+    const migratedQuals = [];
+    qualificationsList.forEach(q => {
+      if (typeof q !== 'string') return;
+      const trimmed = q.trim();
+      if (!trimmed) return;
+      if (trimmed === 'B.Tech / B.E.') {
+        migratedQuals.push('B.Tech', 'B.E.');
+      } else if (trimmed === 'M.Tech / M.E.') {
+        migratedQuals.push('M.Tech', 'M.E.');
+      } else {
+        migratedQuals.push(trimmed);
+      }
+    });
+    const finalQualificationsList = Array.from(new Set(migratedQuals));
 
     const profileData = {
       _id: teacherProfile?._id || user._id,
@@ -949,8 +997,8 @@ exports.getTeacherProfile = async (req, res) => {
       phone: user.phone || teacherProfile?.personalInfo?.phone || '',
       address: teacherProfile?.personalInfo?.address || '',
       designation: teacherProfile?.designation || user.designation || 'Faculty',
-      highestQualification: qual,
-      qualifications: qualificationsList,
+      highestQualification: finalQualificationsList.join(', ') || qual,
+      qualifications: finalQualificationsList,
       department: teacherProfile?.department || user.department || '',
       departmentRef: teacherProfile?.departmentRef || null,
       specialization: teacherProfile?.professionalInfo?.specialization || user.specialization || '',
@@ -971,8 +1019,9 @@ exports.getTeacherProfile = async (req, res) => {
         code: d.code,
         isActive: d.isActive !== false
       })),
-      qualifications: QUALIFICATION_OPTIONS,
-      qualificationsOptions: QUALIFICATION_OPTIONS
+      qualifications: TEACHER_QUALIFICATION_OPTIONS,
+      qualificationsOptions: TEACHER_QUALIFICATION_OPTIONS,
+      teacherQualifications: TEACHER_QUALIFICATION_OPTIONS
     });
   } catch (error) {
     console.error('getTeacherProfile error:', error);
@@ -1124,7 +1173,35 @@ exports.updateTeacherProfile = async (req, res) => {
     if (Array.isArray(qualifications) && qualifications.length > 0) {
       normalizedQuals = qualifications.map(q => (typeof q === 'string' ? q.trim() : '')).filter(Boolean);
     } else if (finalQual && typeof finalQual === 'string' && finalQual.trim()) {
-      normalizedQuals = [finalQual.trim()];
+      if (finalQual.includes(',')) {
+        normalizedQuals = finalQual.split(',').map(s => s.trim()).filter(Boolean);
+      } else {
+        normalizedQuals = [finalQual.trim()];
+      }
+    }
+
+    // Migrate legacy combined qualifications
+    const cleanQuals = [];
+    normalizedQuals.forEach(q => {
+      if (typeof q !== 'string') return;
+      const trimmed = q.trim();
+      if (!trimmed) return;
+      if (trimmed === 'B.Tech / B.E.') {
+        cleanQuals.push('B.Tech', 'B.E.');
+      } else if (trimmed === 'M.Tech / M.E.') {
+        cleanQuals.push('M.Tech', 'M.E.');
+      } else {
+        cleanQuals.push(trimmed);
+      }
+    });
+    const finalNormalizedQuals = Array.from(new Set(cleanQuals));
+
+    // 8. Validate Experience (Years)
+    if (yearsOfExperience !== undefined && yearsOfExperience !== null && yearsOfExperience !== '') {
+      const numExp = Number(yearsOfExperience);
+      if (isNaN(numExp) || numExp < 0 || numExp > 70) {
+        errors.yearsOfExperience = 'Please enter a valid non-negative number of years (0 - 70)';
+      }
     }
 
     if (Object.keys(errors).length > 0) {
@@ -1149,8 +1226,8 @@ exports.updateTeacherProfile = async (req, res) => {
       user.specialization = typeof specialization === 'string' ? specialization.trim() : '';
     }
     if (highestQualification !== undefined || customQualification !== undefined || otherQualification !== undefined || qualifications !== undefined) {
-      user.qualifications = normalizedQuals;
-      user.highestQualification = (typeof finalQual === 'string' && finalQual.trim()) ? finalQual.trim() : (normalizedQuals[0] || '');
+      user.qualifications = finalNormalizedQuals;
+      user.highestQualification = finalNormalizedQuals.join(', ') || (typeof finalQual === 'string' ? finalQual.trim() : '');
     }
     if (profilePhoto !== undefined) {
       user.profilePhoto = cleanPhoto;
@@ -1177,13 +1254,13 @@ exports.updateTeacherProfile = async (req, res) => {
 
       if (!teacherProfile.professionalInfo) teacherProfile.professionalInfo = {};
       if (highestQualification !== undefined || customQualification !== undefined || otherQualification !== undefined || qualifications !== undefined) {
-        teacherProfile.professionalInfo.qualifications = normalizedQuals;
-        teacherProfile.professionalInfo.highestQualification = (typeof finalQual === 'string' && finalQual.trim()) ? finalQual.trim() : (normalizedQuals[0] || '');
+        teacherProfile.professionalInfo.qualifications = finalNormalizedQuals;
+        teacherProfile.professionalInfo.highestQualification = finalNormalizedQuals.join(', ') || (typeof finalQual === 'string' ? finalQual.trim() : '');
       }
       if (specialization !== undefined) {
         teacherProfile.professionalInfo.specialization = typeof specialization === 'string' ? specialization.trim() : '';
       }
-      if (yearsOfExperience !== undefined) {
+      if (yearsOfExperience !== undefined && yearsOfExperience !== null && yearsOfExperience !== '') {
         const numExp = Number(yearsOfExperience);
         teacherProfile.professionalInfo.yearsOfExperience = !isNaN(numExp) && numExp >= 0 ? numExp : 0;
       }
@@ -1205,10 +1282,10 @@ exports.updateTeacherProfile = async (req, res) => {
           address: typeof address === 'string' ? address.trim() : ''
         },
         professionalInfo: {
-          qualifications: normalizedQuals,
-          highestQualification: (typeof finalQual === 'string' && finalQual.trim()) ? finalQual.trim() : (normalizedQuals[0] || ''),
+          qualifications: finalNormalizedQuals,
+          highestQualification: finalNormalizedQuals.join(', ') || (typeof finalQual === 'string' ? finalQual.trim() : ''),
           specialization: typeof specialization === 'string' ? specialization.trim() : '',
-          yearsOfExperience: typeof yearsOfExperience !== 'undefined' ? Number(yearsOfExperience) || 0 : 0
+          yearsOfExperience: typeof yearsOfExperience !== 'undefined' && yearsOfExperience !== null && yearsOfExperience !== '' ? Number(yearsOfExperience) || 0 : 0
         }
       });
       await teacherProfile.save();
@@ -1316,33 +1393,62 @@ exports.getTeacherStudents = async (req, res) => {
       });
     }
 
-    // 2. Filter target classes based on query params: yearOfStudy, department, classId
-    const { yearOfStudy, department, classId } = req.query;
+    // 2. Filter target classes based on query params: yearOfStudy, department, classId, section
+    const { yearOfStudy, department, classId, section } = req.query;
     let targetClassIds = assignedClassIds;
 
-    // Security check: if classId is specified, verify teacher is authorized for that class
-    if (classId && classId !== 'all') {
-      const matchCid = assignedClassIds.find(id => id.toString() === classId);
-      if (!matchCid) {
-        return res.status(403).json({
-          success: false,
-          error: 'Unauthorized: You are not assigned to this section.'
-        });
-      }
-      targetClassIds = [matchCid];
-    } else {
-      // Filter by yearOfStudy and/or department if supplied
-      if (yearOfStudy && yearOfStudy !== 'all') {
-        targetClassIds = targetClassIds.filter(cid => {
-          const c = assignedClassMap.get(cid.toString());
-          return c && (c.yearOfStudy === yearOfStudy || normalizeYearOfStudy(c.yearOfStudy, c.semester) === yearOfStudy);
-        });
+    // Filter by yearOfStudy if supplied
+    if (yearOfStudy && yearOfStudy !== 'all') {
+      targetClassIds = targetClassIds.filter(cid => {
+        const c = assignedClassMap.get(cid.toString());
+        return c && (c.yearOfStudy === yearOfStudy || normalizeYearOfStudy(c.yearOfStudy, c.semester) === yearOfStudy);
+      });
+    }
+
+    // Filter by department if supplied
+    if (department && department !== 'all') {
+      targetClassIds = targetClassIds.filter(cid => {
+        const c = assignedClassMap.get(cid.toString());
+        return c && c.department && (c.department.toLowerCase() === department.toLowerCase() || (c.departmentRef && c.departmentRef.code && c.departmentRef.code.toLowerCase() === department.toLowerCase()));
+      });
+    }
+
+    // Filter by classId (ObjectId, comma-separated ObjectIds, or section name) and/or section
+    const classParam = (classId && classId !== 'all') ? classId.trim() : null;
+    const sectionParam = (section && section !== 'all') ? section.trim() : null;
+
+    if (classParam || sectionParam) {
+      if (classParam) {
+        const parts = classParam.split(',').map(s => s.trim()).filter(Boolean);
+        const areAllObjectIds = parts.length > 0 && parts.every(p => mongoose.Types.ObjectId.isValid(p) && p.length === 24);
+
+        if (areAllObjectIds) {
+          // Security check: verify teacher is authorized for all requested class IDs
+          for (const pid of parts) {
+            if (!assignedClassMap.has(pid)) {
+              return res.status(403).json({
+                success: false,
+                error: 'Unauthorized: You are not assigned to this section.'
+              });
+            }
+          }
+          const partSet = new Set(parts);
+          targetClassIds = targetClassIds.filter(cid => partSet.has(cid.toString()));
+        } else {
+          // classParam is a section name (e.g. 'A', 'Section A')
+          const cleanParam = cleanSectionName(classParam);
+          targetClassIds = targetClassIds.filter(cid => {
+            const c = assignedClassMap.get(cid.toString());
+            return c && cleanSectionName(c.section) === cleanParam;
+          });
+        }
       }
 
-      if (department && department !== 'all') {
+      if (sectionParam) {
+        const cleanSec = cleanSectionName(sectionParam);
         targetClassIds = targetClassIds.filter(cid => {
           const c = assignedClassMap.get(cid.toString());
-          return c && c.department && (c.department.toLowerCase() === department.toLowerCase() || (c.departmentRef && c.departmentRef.code && c.departmentRef.code.toLowerCase() === department.toLowerCase()));
+          return c && cleanSectionName(c.section) === cleanSec;
         });
       }
     }
@@ -1798,19 +1904,26 @@ exports.getTeacherRiskAnalytics = async (req, res) => {
     const assignedSubjectMap = new Map();
 
     assignments.forEach(a => {
-      if (a.classRef && a.classRef.isActive !== false) {
-        const cid = a.classRef._id.toString();
+      const cid = a.classRef && a.classRef.isActive !== false ? a.classRef._id.toString() : null;
+      const sid = a.subject && a.subject.isActive !== false ? a.subject._id.toString() : null;
+
+      if (cid) {
         if (!assignedClassMap.has(cid)) {
           assignedClassIds.push(a.classRef._id);
           const normalizedYear = normalizeYearOfStudy(a.classRef.yearOfStudy, a.classRef.semester);
           assignedClassMap.set(cid, {
             ...a.classRef.toObject(),
-            yearOfStudy: a.classRef.yearOfStudy || normalizedYear
+            yearOfStudy: a.classRef.yearOfStudy || normalizedYear,
+            subjectIds: sid ? [sid] : []
           });
+        } else if (sid) {
+          const cObj = assignedClassMap.get(cid);
+          if (Array.isArray(cObj.subjectIds) && !cObj.subjectIds.includes(sid)) {
+            cObj.subjectIds.push(sid);
+          }
         }
       }
-      if (a.subject && a.subject.isActive !== false) {
-        const sid = a.subject._id.toString();
+      if (sid) {
         if (!assignedSubjectMap.has(sid)) {
           assignedSubjectMap.set(sid, a.subject);
         }
@@ -1821,12 +1934,19 @@ exports.getTeacherRiskAnalytics = async (req, res) => {
     const yearsSet = new Set();
     const deptsSet = new Set();
     const sectionsList = [];
-    const subjectsList = Array.from(assignedSubjectMap.values()).map(s => ({
-      _id: s._id,
-      code: s.code,
-      name: s.name,
-      label: s.code ? `${s.code} — ${s.name}` : s.name
-    }));
+    const subjectsList = Array.from(assignedSubjectMap.values()).map(s => {
+      const sIdStr = s._id.toString();
+      const classIdsForSub = assignments
+        .filter(a => a.subject && a.subject._id.toString() === sIdStr && a.classRef && a.classRef.isActive !== false)
+        .map(a => a.classRef._id.toString());
+      return {
+        _id: s._id,
+        code: s.code,
+        name: s.name,
+        label: s.code ? `${s.code} — ${s.name}` : s.name,
+        classIds: Array.from(new Set(classIdsForSub))
+      };
+    });
 
     assignedClassMap.forEach((c) => {
       if (c.yearOfStudy) yearsSet.add(c.yearOfStudy);
@@ -1836,7 +1956,8 @@ exports.getTeacherRiskAnalytics = async (req, res) => {
         yearOfStudy: c.yearOfStudy,
         department: c.department,
         section: c.section,
-        name: c.name
+        name: c.name,
+        subjectIds: c.subjectIds || []
       });
     });
 
@@ -1873,32 +1994,59 @@ exports.getTeacherRiskAnalytics = async (req, res) => {
       });
     }
 
-    // 4. Filter target classes based on query: yearOfStudy, department, classId
-    const { yearOfStudy, department, classId, subjectId, riskLevel } = req.query;
+    // 4. Filter target classes based on query: yearOfStudy, department, classId, section, subjectId, riskLevel
+    const { yearOfStudy, department, classId, section, subjectId, riskLevel } = req.query;
     let targetClassIds = assignedClassIds;
 
-    // Security check: if classId specified, verify authorization
-    if (classId && classId !== 'all') {
-      const matchCid = assignedClassIds.find(id => id.toString() === classId);
-      if (!matchCid) {
-        return res.status(403).json({
-          success: false,
-          error: 'Unauthorized: You are not assigned to this section.'
-        });
-      }
-      targetClassIds = [matchCid];
-    } else {
-      if (yearOfStudy && yearOfStudy !== 'all') {
-        targetClassIds = targetClassIds.filter(cid => {
-          const c = assignedClassMap.get(cid.toString());
-          return c && (c.yearOfStudy === yearOfStudy || normalizeYearOfStudy(c.yearOfStudy, c.semester) === yearOfStudy);
-        });
+    if (yearOfStudy && yearOfStudy !== 'all') {
+      targetClassIds = targetClassIds.filter(cid => {
+        const c = assignedClassMap.get(cid.toString());
+        return c && (c.yearOfStudy === yearOfStudy || normalizeYearOfStudy(c.yearOfStudy, c.semester) === yearOfStudy);
+      });
+    }
+
+    if (department && department !== 'all') {
+      targetClassIds = targetClassIds.filter(cid => {
+        const c = assignedClassMap.get(cid.toString());
+        return c && c.department && c.department.toLowerCase() === department.toLowerCase();
+      });
+    }
+
+    // Filter by classId (ObjectId, comma-separated ObjectIds, or section name) and/or section
+    const classParam = (classId && classId !== 'all') ? classId.trim() : null;
+    const sectionParam = (section && section !== 'all') ? section.trim() : null;
+
+    if (classParam || sectionParam) {
+      if (classParam) {
+        const parts = classParam.split(',').map(s => s.trim()).filter(Boolean);
+        const areAllObjectIds = parts.length > 0 && parts.every(p => mongoose.Types.ObjectId.isValid(p) && p.length === 24);
+
+        if (areAllObjectIds) {
+          // Security check: verify teacher is authorized for all requested class IDs
+          for (const pid of parts) {
+            if (!assignedClassMap.has(pid)) {
+              return res.status(403).json({
+                success: false,
+                error: 'Unauthorized: You are not assigned to this section.'
+              });
+            }
+          }
+          const partSet = new Set(parts);
+          targetClassIds = targetClassIds.filter(cid => partSet.has(cid.toString()));
+        } else {
+          const cleanParam = cleanSectionName(classParam);
+          targetClassIds = targetClassIds.filter(cid => {
+            const c = assignedClassMap.get(cid.toString());
+            return c && cleanSectionName(c.section) === cleanParam;
+          });
+        }
       }
 
-      if (department && department !== 'all') {
+      if (sectionParam) {
+        const cleanSec = cleanSectionName(sectionParam);
         targetClassIds = targetClassIds.filter(cid => {
           const c = assignedClassMap.get(cid.toString());
-          return c && c.department && c.department.toLowerCase() === department.toLowerCase();
+          return c && cleanSectionName(c.section) === cleanSec;
         });
       }
     }

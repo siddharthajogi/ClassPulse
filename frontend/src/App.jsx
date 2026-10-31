@@ -55,6 +55,7 @@ import TeacherSectionDetails from './components/TeacherSectionDetails';
 import TeacherStudents from './components/TeacherStudents';
 import TeacherRiskAnalytics from './components/TeacherRiskAnalytics';
 import TeacherPlaceholder from './components/TeacherPlaceholder';
+import TeacherKnowledgeGaps from './components/TeacherKnowledgeGaps';
 import TeacherProfilePage from './components/TeacherProfilePage';
 import TeacherNotifications from './components/TeacherNotifications';
 import { authApi } from './api';
@@ -254,13 +255,7 @@ export default function App() {
         />
         <Route
           path="knowledge-gaps"
-          element={
-            <TeacherPlaceholder
-              title="Knowledge-Gap Analysis"
-              icon={Target}
-              description="Topic-level concept diagnosis, prerequisite assessment, and remediation heatmaps."
-            />
-          }
+          element={<TeacherKnowledgeGaps currentUser={currentUser} />}
         />
         <Route
           path="personalized-learning"

@@ -187,6 +187,12 @@ router.patch('/users/:id/status', adminController.updateUserStatus);
 router.post('/users/:id/reset-password', adminController.adminResetPassword);
 
 /**
+ * @route   POST /api/admin/teachers/:id/reset-password
+ * @desc    Admin resets teacher password
+ */
+router.post('/teachers/:id/reset-password', adminController.adminResetPassword);
+
+/**
  * @route   DELETE /api/admin/students/:id
  * @desc    Permanently delete a student record
  */

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpenCheck, Calendar, Clock, AlertCircle, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { studentApi } from '../api';
+import { usePageRefresh } from '../context/RefreshContext';
 
 export default function StudentAssignments() {
   const [data, setData] = useState(null);
@@ -28,12 +29,15 @@ export default function StudentAssignments() {
     fetchAssignments();
   }, []);
 
+  // Register with global header refresh button
+  usePageRefresh(fetchAssignments, []);
+
   const assignments = data?.assignments || [];
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-600 dark:text-pink-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E3A8A] dark:text-blue-400" />
         <p className="text-sm font-medium">Loading your assignments...</p>
       </div>
     );
@@ -47,7 +51,7 @@ export default function StudentAssignments() {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{error}</p>
         <button
           onClick={fetchAssignments}
-          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+          className="px-4 py-2 bg-[#1E3A8A] hover:bg-[#172554] text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
         >
           Try Again
         </button>
@@ -64,7 +68,7 @@ export default function StudentAssignments() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
               My Assignments
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/80">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1E3A8A] dark:text-blue-300 border border-blue-200 dark:border-blue-900/80">
               {assignments.length} Active Courses
             </span>
           </div>
@@ -72,14 +76,6 @@ export default function StudentAssignments() {
             Coursework deliverables, homework projects, and laboratory task submissions.
           </p>
         </div>
-
-        <button
-          onClick={fetchAssignments}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
-          <span>Refresh</span>
-        </button>
       </div>
 
       {/* Assignments Status List */}
@@ -98,7 +94,7 @@ export default function StudentAssignments() {
                 <div>
                   <div className="flex items-start justify-between gap-3 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
                     <div>
-                      <span className="text-[11px] font-bold text-pink-600 dark:text-pink-400 uppercase tracking-wider">
+                      <span className="text-[11px] font-bold text-[#1E3A8A] dark:text-blue-400 uppercase tracking-wider">
                         {subject.code || 'COURSE'}
                       </span>
                       <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">
